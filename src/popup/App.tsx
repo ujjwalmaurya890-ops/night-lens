@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { LIMITS } from '../shared/defaults';
 import type { SiteStatus } from '../shared/types';
-import { AppearanceControls, Logo, PresetChips, StatusLine, Switch, ThemeGrid } from '../ui/components';
+import { AppearanceControls, Logo, PresetChips, Slider, StatusLine, Switch, ThemeGrid } from '../ui/components';
 import { usePageStatus, useSettings } from '../ui/hooks';
 
 const STATUS_TEXT: Record<SiteStatus, string> = {
@@ -160,6 +161,7 @@ export function App() {
           </div>
           {showAdvanced && (
             <div className="stack animate-in" style={{ paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <Slider id="warmth-p" label="Warmth" value={settings.warmth ?? settings.sepia} limit={LIMITS.warmth} onCommit={(warmth) => void change((s) => ({ ...s, warmth, sepia: warmth }), `Warmth set to ${warmth}%.`)} />
               <div className="field">
                 <label className="field-label">Keyboard Shortcut</label>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -20,7 +20,7 @@ Verified by `grep` over `src/` (zero matches): `fetch(`, `XMLHttpRequest`, `WebS
 - **No analytics/telemetry/remote config.**
 - **Message validation:** Content accepts only `get-status` from own extension (`sender.id`); popup validates well-formed `status-changed` from active tab top frame. Hostnames re-validated.
 - **Sanitization on every read/write** (`sanitizeSettings`): types, ranges, theme IDs, hostnames (strict regex, `__proto__` rejected), max 2000 rules, max 50 custom themes, max 20k custom CSS. Corrupt storage → defaults, not throw.
-- **Custom CSS validation:** Blocks `javascript:`, `expression(`, `@import`; max length enforced; empty discarded.
+- **Custom CSS validation** (`src/shared/css.ts` `sanitizeCustomCss`, applied on storage write *and* again at injection time): blocks `javascript:`, `expression(`, `@import`, `@font-face`, `behavior:`, `-moz-binding`, and **any `url(...)` that is not an inline `data:` URI or in-document `#fragment`** — so injected CSS can never trigger an external network request from the page. Max length enforced; empty discarded.
 - **Injected styling inert:** Rules only contain `[0-9a-f]{6,8}` keys engine produced. No page text in CSS/HTML. React escapes; no `innerHTML`.
 - **Per-site overrides** validated (theme, brightness etc. clamped).
 - **Theme import** validated via `sanitizeCustomThemes`; malformed rejected.

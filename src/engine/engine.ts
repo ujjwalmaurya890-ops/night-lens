@@ -58,6 +58,10 @@ export interface EngineConfig {
   developerMode?: boolean;
   compatibility?: 'auto' | 'aggressive' | 'gentle' | 'mediaOnly';
   textSize?: number; // 80-130 percent for font scaling
+  /** Performance tuning (from settings.performance); falls back to the constants below. */
+  batchSize?: number;
+  debounceMs?: number;
+  enableCache?: boolean;
 }
 export interface EngineOptions {
   onStatus?: (status: EngineStatus) => void;
@@ -231,13 +235,19 @@ export class ThemeEngine {
     this.timers.add(id);
     return id;
   }
+  private get debounceMs(): number { return this.config.debounceMs ?? DEBOUNCE_MS; }
+  private get batchSize(): number {
+    const base = this.config.batchSize ?? BATCH_SIZE;
+    return this.config.compatibility === 'aggressive' ? Math.round(base * 1.5) : base;
+  }
+
   private scheduleReevaluate(): void {
     if (this.reevalTimer) clearTimeout(this.reevalTimer);
-    this.reevalTimer = this.after(DEBOUNCE_MS, () => { this.evaluate(); if (this.applied) this.rescanAll(); });
+    this.reevalTimer = this.after(this.debounceMs, () => { this.evaluate(); if (this.applied) this.rescanAll(); });
   }
   private scheduleRescan(): void {
     if (this.rescanTimer) clearTimeout(this.rescanTimer);
-    this.rescanTimer = this.after(DEBOUNCE_MS, () => { if (this.applied) this.rescanAll(); });
+    this.rescanTimer = this.after(this.debounceMs, () => { if (this.applied) this.rescanAll(); });
   }
 
   private evaluate(): void {
@@ -425,8 +435,7 @@ export class ThemeEngine {
     if (!this.running || !this.applied) { this.queue.clear(); return; }
     const start = typeof performance !== 'undefined' ? performance.now() : 0;
     const batch: Element[] = [];
-    const effectiveBatch = this.config.compatibility === 'aggressive' ? BATCH_SIZE * 1.5 : BATCH_SIZE;
-    for (const el of this.queue) { if (batch.length >= effectiveBatch) break; batch.push(el); }
+    for (const el of this.queue) { if (batch.length >= this.batchSize) break; batch.push(el); }
     for (const el of batch) this.queue.delete(el);
     this.doc.documentElement.setAttribute(READY, '');
     const items = batch.filter((el) => el.isConnected);
@@ -450,6 +459,7 @@ export class ThemeEngine {
 
   private color(v: string): RGBA | null {
     if (v === '') return { ...TRANSPARENT };
+    if (this.config.enableCache === false) return parseColor(v);
     // Simple cache
     const cached = this.seenColors.get(v);
     if (cached) { this.stats.cacheHit++; return cached; }

@@ -29,6 +29,7 @@ src/
     defaults.ts            LIMITS, cloneDefaults(), migrateLegacySettings() (v1→v2)
     hostname.ts            normalizeHostname (exact, no subdomain inheritance), hostnameFromUserInput, getSiteMode
     storage.ts             sanitizeSettings (strict), load/update/reset/subscribe, export/import, theme import
+    css.ts                 sanitizeCustomCss — shared custom-CSS hardening (no remote url()/@import/@font-face/javascript:), used on write and at injection
     messages.ts            GET_STATUS / STATUS_CHANGED validation
     decision.ts            decide() (enabled, siteRules, system, schedule), getEffectiveTheme/Settings, isWithinSchedule
   engine/
@@ -108,7 +109,8 @@ One `MutationObserver` (childList + class/style, subtree) per root (document + o
 
 ### Performance Optimizations
 
-- Color parse cache (Map, clear after 2000 entries, hit counter).
+- Color parse cache (Map, clear after 2000 entries, hit counter) — toggleable via `performance.enableCache`.
+- Batch size and mutation debounce come from `settings.performance` (`maxElementsPerFrame`, `debounceMs`) and are passed into `EngineConfig` (`batchSize`, `debounceMs`) by the content script — the Performance settings page controls the real engine, not a dead UI.
 - One recalc per batch, RAF + dedup.
 - Filtered style attribute changes (regex).
 - History patching avoids polling.

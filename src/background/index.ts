@@ -1,4 +1,4 @@
-import { handleAlarm, handleCommand, handleInstalled, handleStartup, updateBadge } from './handlers';
+import { handleAlarm, handleCommand, handleInstalled, handleMessage, handleStartup, updateBadge } from './handlers';
 import { subscribeToSettings } from '../shared/storage';
 
 chrome.commands.onCommand.addListener((command) => { void handleCommand(command); });
@@ -16,9 +16,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (typeof message === 'object' && message !== null) {
     const m = message as Record<string, unknown>;
     if (m.type === 'nightlens/get-storage' || m.type === 'nightlens/export-settings') {
-      import('./handlers').then(({ handleMessage }) => {
-        void handleMessage(message, sender).then(sendResponse);
-      });
+      void handleMessage(message, sender).then(sendResponse);
       return true;
     }
   }

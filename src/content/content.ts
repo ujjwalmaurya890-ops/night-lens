@@ -1,6 +1,7 @@
 import { ThemeEngine, type EngineStatus } from '../engine/engine';
 import { buildTokens } from '../engine/palette';
 import { decide, getEffectiveSettings } from '../shared/decision';
+import { sanitizeCustomCss } from '../shared/css';
 import { normalizeHostname } from '../shared/hostname';
 import { STATUS_CHANGED, isGetStatusMessage, type StatusChangedMessage, type StatusPayload } from '../shared/messages';
 import { loadSettings, subscribeToSettings } from '../shared/storage';
@@ -14,17 +15,6 @@ export function getSiteHostname(loc: Location = location): string | null {
     if (origins && origins.length > 0) return normalizeHostname(new URL(origins[origins.length - 1]!).hostname);
   } catch { /* opaque origin: fall through */ }
   return normalizeHostname(loc.hostname);
-}
-
-// Custom CSS validation
-function sanitizeCustomCSS(css: string): string {
-  if (!css || !css.trim()) return '';
-  // Block dangerous patterns
-  const lower = css.toLowerCase();
-  if (lower.includes('javascript:') || lower.includes('expression(')) return '';
-  // Limit size
-  if (css.length > 20000) return css.slice(0, 20000);
-  return css;
 }
 
 export function startContentScript(): void {
@@ -68,12 +58,7 @@ export function startContentScript(): void {
 
     if (!decision.active) {
       engine.stop();
-      // Map scheduled-off to a user-friendly status
-      const statusMap: Record<string, SiteStatus> = {
-        'scheduled-off': 'waiting-for-system' as SiteStatus,
-      };
-      const status = (decision as any).status;
-      setStatus((statusMap[status] as SiteStatus) ?? (status as SiteStatus));
+      setStatus(decision.status);
       return;
     }
 
@@ -97,13 +82,13 @@ export function startContentScript(): void {
     }
 
     const customCSS = hostname ? settings.customCSS[hostname] : undefined;
-    const sanitizedCSS = customCSS ? sanitizeCustomCSS(customCSS) : undefined;
+    const sanitizedCSS = customCSS ? sanitizeCustomCss(customCSS) : undefined;
 
     const config: any = {
       tokens,
       skipNativeDarkCheck: decision.forceNative,
       readingMode: effective.readingMode.enabled ? effective.readingMode : undefined,
-      customCSS: sanitizedCSS,
+      customCSS: sanitizedCSS || undefined,
       accessibility: {
         underlineLinks: effective.accessibility.underlineLinks,
         reducedMotion: effective.accessibility.reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -112,6 +97,9 @@ export function startContentScript(): void {
       developerMode: effective.developerMode,
       compatibility: hostname ? effective.compatibility[hostname] ?? 'auto' : 'auto',
       textSize: effective.textSize,
+      batchSize: effective.performance.maxElementsPerFrame,
+      debounceMs: effective.performance.debounceMs,
+      enableCache: effective.performance.enableCache,
     };
 
     if (engine.isRunning) engine.update(config); else engine.start(config);
