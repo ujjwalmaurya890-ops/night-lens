@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LIMITS, STORAGE_KEY, cloneDefaults } from '../../src/shared/defaults';
-import { decide } from '../../src/shared/decision';
+import { decide, isWithinSchedule } from '../../src/shared/decision';
 import { getSiteMode, hostnameFromUserInput, normalizeHostname } from '../../src/shared/hostname';
 import { isGetStatusMessage, isStatusChangedMessage, isStatusPayload } from '../../src/shared/messages';
 import { loadSettings, resetSettings, sanitizeSettings, subscribeToSettings, updateSettings } from '../../src/shared/storage';
@@ -97,6 +97,23 @@ describe('decide()', () => {
     expect(decide(s, 'a.com', true)).toMatchObject({ active: true });
   });
   it('global off beats a forced-on site rule', () => expect(decide({ ...base, enabled: false, siteRules: { 'a.com': 'on' } }, 'a.com', true).active).toBe(false));
+  it('reports scheduled-off when outside the schedule window (content script passes this through to the popup)', () => {
+    const s = { ...base, schedule: { ...base.schedule, enabled: true, start: '22:00', end: '07:00' } };
+    const noon = new Date(2026, 10, 2, 12, 0);
+    expect(decide(s, 'a.com', true, noon)).toMatchObject({ active: false, status: 'scheduled-off', siteMode: null });
+    const night = new Date(2026, 10, 2, 23, 30);
+    expect(decide(s, 'a.com', true, night)).toMatchObject({ active: true });
+    // forced-on sites ignore the schedule
+    expect(decide({ ...s, siteRules: { 'a.com': 'on' } }, 'a.com', true, noon)).toMatchObject({ active: true, forceNative: true });
+  });
+  it('isWithinSchedule handles overnight windows and 00:00-00:00', () => {
+    const sch = { enabled: true, start: '22:00', end: '07:00', followSystem: false };
+    expect(isWithinSchedule(sch, new Date(2026, 0, 1, 23, 0))).toBe(true);
+    expect(isWithinSchedule(sch, new Date(2026, 0, 1, 6, 59))).toBe(true);
+    expect(isWithinSchedule(sch, new Date(2026, 0, 1, 12, 0))).toBe(false);
+    expect(isWithinSchedule({ ...sch, start: '00:00', end: '00:00' }, new Date(2026, 0, 1, 12, 0))).toBe(true);
+    expect(isWithinSchedule({ ...sch, enabled: false }, new Date(2026, 0, 1, 12, 0))).toBe(true);
+  });
 });
 
 describe('message validation', () => {

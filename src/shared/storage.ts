@@ -1,4 +1,5 @@
-import { DEFAULT_ACCESSIBILITY, DEFAULT_PERFORMANCE, DEFAULT_READING, DEFAULT_SCHEDULE, LIMITS, MAX_CUSTOM_CSS_LENGTH, MAX_CUSTOM_THEMES, MAX_SITE_RULES, STORAGE_KEY, cloneDefaults, migrateLegacySettings } from './defaults';
+import { DEFAULT_ACCESSIBILITY, DEFAULT_PERFORMANCE, DEFAULT_READING, DEFAULT_SCHEDULE, LIMITS, MAX_CUSTOM_THEMES, MAX_SITE_RULES, STORAGE_KEY, cloneDefaults, migrateLegacySettings } from './defaults';
+import { sanitizeCustomCss } from './css';
 import { normalizeHostname } from './hostname';
 import { SITE_MODES, THEME_IDS, type AccessibilitySettings, type CustomTheme, type PerformanceSettings, type ReadingModeSettings, type ScheduleSettings, type Settings, type SiteMode, type SiteRules, type ThemeId } from './types';
 
@@ -85,14 +86,8 @@ function sanitizeCustomCSS(raw: unknown): Record<string, string> {
   for (const [k, v] of Object.entries(raw)) {
     const host = normalizeHostname(k);
     if (!host || typeof v !== 'string') continue;
-    if (v.length > MAX_CUSTOM_CSS_LENGTH) continue;
-    // Basic safety: block @import with remote URLs and javascript:
-    const lower = v.toLowerCase();
-    if (lower.includes('javascript:') || lower.includes('expression(') || lower.includes('@import')) {
-      // Allow @import only for google fonts? For safety, strip @import entirely
-      if (lower.includes('@import')) continue;
-    }
-    out[host] = v.slice(0, MAX_CUSTOM_CSS_LENGTH);
+    const clean = sanitizeCustomCss(v);
+    if (clean) out[host] = clean;
   }
   return out;
 }

@@ -3,8 +3,10 @@
 ## 1. Source Code
 Fully upgraded source in `src/` (TypeScript strict, React 19, Vite 8, MV3):
 
-- **Modified (10):** `src/manifest.json`, `src/shared/types.ts`, `src/shared/defaults.ts`, `src/shared/storage.ts`, `src/shared/decision.ts`, `src/engine/palette.ts`, `src/engine/mapper.ts`, `src/engine/styles.ts`, `src/engine/engine.ts`, `src/content/content.ts`, `src/background/handlers.ts`, `src/background/index.ts`, `src/ui/ui.css`, `src/ui/components.tsx`, `src/ui/hooks.ts`, `src/popup/App.tsx`, `src/options/Options.tsx`, `package.json`
-- **Unchanged (preserved):** `src/engine/color.ts`, `src/engine/detect.ts`, `src/content/index.ts`, `src/popup/index.html`, `src/options/index.html`, `src/popup/main.tsx`, `src/options/main.tsx`, `src/vite-env.d.ts`, `scripts/build.mjs`, `scripts/make-icons.mjs`, `tsconfig.json`, `vitest.config.ts`, `playwright.config.ts`
+- **Modified this round:** `src/engine/engine.ts` (performance settings wired: `batchSize`/`debounceMs`/`enableCache`), `src/content/content.ts` (passes performance settings; `scheduled-off` status passed through instead of mislabeled; uses shared CSS sanitizer), `src/shared/storage.ts` (custom CSS hardened via shared sanitizer), `src/background/index.ts` (static handler import), `src/popup/App.tsx` (warmth slider in advanced section), `src/options/Options.tsx` (Websites tab: force-on/exclude rule form, per-site theme assignment, compatibility-profile form), `docs/*`, `README.md`
+- **New this round:** `src/shared/css.ts` (shared `sanitizeCustomCss`), `tests/unit/css.test.ts`
+- **Extended tests:** `tests/unit/engine.test.ts` (+4 performance-setting tests), `tests/unit/shared.test.ts` (+2 schedule tests), `tests/unit/popup.test.tsx` (+2 options-form tests)
+- **Preserved:** all prior files and behavior, incl. `src/engine/color.ts`, `src/engine/detect.ts`, build scripts, configs, e2e suite
 
 ## 2. Production Build
 `dist/` ready to load:
@@ -24,7 +26,7 @@ Load: `Chrome → Extensions → Developer mode → Load unpacked → dist/`
 `docs/ARCHITECTURE.md` — components, source layout, theming passes, batching, dynamic content, special content, compatibility profiles, performance.
 
 ## 5. Test Suite
-- Unit: 559 tests (7 files)
+- Unit: 573 tests (8 files)
 - E2E: ~40 tests (fixtures)
 - Typecheck: strict, 0 errors
 
@@ -77,7 +79,7 @@ See `docs/LIMITATIONS.md` — 17 documented limitations (hover, gradients, logos
 
 ```bash
 npm run typecheck # ✓
-npm test          # ✓ 559 passed
+npm test          # ✓ 573 passed
 npm run build     # ✓ dist/
 ```
 

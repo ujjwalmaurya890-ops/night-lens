@@ -34,4 +34,4 @@
 | **Reset** (confirmed, restores defaults + clears rules) | `storage` + `ui` | ✓ popup reset test | — | — | |
 | **UI contrast** (own UI WCAG AA, focus visible, reduced motion) | `ui/ui.css` | ✓ 22 tests (text/bg, control-border, focus, reduced-motion, outline) | — | — | |
 
-**Coverage:** 559 unit tests pass; E2E suite covers core flows on 12 fixture pages.
+**Coverage:** 573 unit tests pass; E2E suite covers core flows on 12 fixture pages.

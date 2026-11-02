@@ -257,6 +257,47 @@ describe('dynamic content', () => {
   });
 });
 
+describe('performance settings are honored (not decorative)', () => {
+  it('respects a custom batchSize: only N elements are themed per flush', async () => {
+    page(`<div id="root" style="${LIGHT}">${'<p style="color:#222">x</p>'.repeat(30)}</div>`);
+    run(config({ batchSize: 5 }));
+    await settle(30);
+    const done = document.querySelectorAll('#root p[data-nl-fg]').length;
+    expect(done).toBeGreaterThan(0);
+    expect(done).toBeLessThan(30); // not everything in one pass
+    // eventually finishes
+    for (let i = 0; i < 60 && document.querySelectorAll('#root p[data-nl-fg]').length < 30; i++) await settle(40);
+    expect(document.querySelectorAll('#root p[data-nl-fg]').length).toBe(30);
+  });
+
+  it('enableCache=false still themes correctly and records no cache hits', async () => {
+    page(`<main id="m" style="${LIGHT}"><p id="p" style="color:#333">Hello</p></main>`);
+    const e = run(config({ enableCache: false }));
+    await settle();
+    expect(document.getElementById('p')!.getAttribute('data-nl-fg')).not.toBeNull();
+    expect(e.getStats().cacheHit).toBe(0);
+  });
+
+  it('enableCache=true (default) produces cache hits on repeated colours', async () => {
+    page(`<div style="${LIGHT}">${'<p style="color:#333333">x</p>'.repeat(10)}</div>`);
+    const e = run(config());
+    await settle();
+    expect(e.getStats().cacheHit).toBeGreaterThan(0);
+  });
+
+  it('debounceMs is used for re-evaluation after a class change', async () => {
+    page(`<p>x</p>`);
+    const onStatus = vi.fn();
+    run(config({ debounceMs: 400 }), onStatus);
+    await settle();
+    document.body.setAttribute('style', 'background-color:#101214');
+    await settle(150); // shorter than the debounce: not yet re-evaluated
+    expect(onStatus).not.toHaveBeenLastCalledWith('native-dark');
+    await settle(500); // past the debounce
+    expect(onStatus).toHaveBeenLastCalledWith('native-dark');
+  });
+});
+
 describe('sites that already have a dark theme', () => {
   const dark = `<div style="background-color:#101214;color:#e8e8e8"><p style="color:#e8e8e8">dark</p></div>`;
 

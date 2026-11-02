@@ -2,10 +2,10 @@ import { useState, type FormEvent } from 'react';
 import { MAX_SITE_RULES } from '../shared/defaults';
 import { hostnameFromUserInput } from '../shared/hostname';
 import { exportSettings, validateImport, exportTheme, importTheme } from '../shared/storage';
-import { AppearanceControls, Logo, PresetChips, StatusLine, Switch, ThemeGrid } from '../ui/components';
+import { AppearanceControls, Logo, PresetChips, StatusLine, Switch, ThemeGrid, THEME_LABELS } from '../ui/components';
 import { useSettings } from '../ui/hooks';
 import { PREMIUM_THEME_META } from '../engine/palette';
-import type { CustomTheme } from '../shared/types';
+import { THEME_IDS, type CustomTheme, type CompatibilityMode, type ThemeId } from '../shared/types';
 
 type Tab = 'overview' | 'appearance' | 'themes' | 'sites' | 'accessibility' | 'automation' | 'performance' | 'privacy' | 'about';
 
@@ -34,6 +34,15 @@ export function Options() {
   const [cssInput, setCssInput] = useState('');
   const [cssHost, setCssHost] = useState('');
   const [searchSites, setSearchSites] = useState('');
+  const [ruleHost, setRuleHost] = useState('');
+  const [ruleMode, setRuleMode] = useState<'on' | 'off'>('on');
+  const [ruleError, setRuleError] = useState('');
+  const [themeHost, setThemeHost] = useState('');
+  const [themePick, setThemePick] = useState<ThemeId>('midnight');
+  const [themeError, setThemeError] = useState('');
+  const [compHost, setCompHost] = useState('');
+  const [compMode, setCompMode] = useState<CompatibilityMode>('gentle');
+  const [compError, setCompError] = useState('');
 
   const excluded = Object.entries(settings.siteRules).filter(([, m]) => m === 'off').map(([h]) => h).sort();
   const forced = Object.entries(settings.siteRules).filter(([, m]) => m === 'on').map(([h]) => h).sort();
@@ -50,6 +59,34 @@ export function Options() {
     void change((s) => ({ ...s, siteRules: { ...s.siteRules, [host]: 'off' } }), `${host} is now excluded.`);
   };
   const removeRule = (host: string) => void change((s) => { const r = { ...s.siteRules }; delete r[host]; return { ...s, siteRules: r }; }, `${host} removed.`);
+
+  const addRule = (e: FormEvent) => {
+    e.preventDefault();
+    const host = hostnameFromUserInput(ruleHost);
+    if (!host) { setRuleError('Enter a website address such as example.com.'); return; }
+    if (Object.keys(settings.siteRules).length >= MAX_SITE_RULES && !(host in settings.siteRules)) { setRuleError('Too many site rules.'); return; }
+    setRuleError('');
+    setRuleHost('');
+    void change((s) => ({ ...s, siteRules: { ...s.siteRules, [host]: ruleMode } }), ruleMode === 'off' ? `${host} is now excluded.` : `Dark mode is forced on for ${host}.`);
+  };
+
+  const assignTheme = (e: FormEvent) => {
+    e.preventDefault();
+    const host = hostnameFromUserInput(themeHost);
+    if (!host) { setThemeError('Enter a website address such as example.com.'); return; }
+    setThemeError('');
+    setThemeHost('');
+    void change((s) => ({ ...s, siteThemes: { ...s.siteThemes, [host]: themePick } }), `${host} now uses the ${THEME_LABELS[themePick] ?? themePick} theme.`);
+  };
+
+  const saveCompat = (e: FormEvent) => {
+    e.preventDefault();
+    const host = hostnameFromUserInput(compHost);
+    if (!host) { setCompError('Enter a website address such as example.com.'); return; }
+    setCompError('');
+    setCompHost('');
+    void change((s) => ({ ...s, compatibility: { ...s.compatibility, [host]: compMode } }), `Compatibility profile "${compMode}" saved for ${host}.`);
+  };
 
   const createCustomTheme = () => {
     if (!customName.trim()) { setNotice({ kind: 'error', text: 'Enter a theme name.' }); return; }
@@ -418,6 +455,47 @@ export function Options() {
                 </form>
                 <div id="exclude-error" className="status error" role="alert">{inputError}</div>
 
+                <form className="row" onSubmit={addRule} noValidate style={{ alignItems: 'flex-end' }}>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label htmlFor="rule-input" className="field-label">Website</label>
+                    <input id="rule-input" type="text" value={ruleHost} placeholder="example.com" aria-invalid={ruleError !== ''} aria-describedby="rule-error" onChange={(e) => setRuleHost(e.target.value)} />
+                  </div>
+                  <div className="field" style={{ width: 150 }}>
+                    <label htmlFor="rule-mode" className="field-label">Action</label>
+                    <select id="rule-mode" value={ruleMode} onChange={(e) => setRuleMode(e.target.value as 'on' | 'off')}>
+                      <option value="on">Force dark on</option>
+                      <option value="off">Exclude</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="btn">Apply rule</button>
+                </form>
+                <div id="rule-error" className="status error" role="alert">{ruleError}</div>
+
+                <form className="row" onSubmit={assignTheme} noValidate style={{ alignItems: 'flex-end' }}>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label htmlFor="theme-host" className="field-label">Assign theme to website</label>
+                    <input id="theme-host" type="text" value={themeHost} placeholder="example.com" aria-invalid={themeError !== ''} aria-describedby="theme-error" onChange={(e) => setThemeHost(e.target.value)} />
+                  </div>
+                  <div className="field" style={{ width: 170 }}>
+                    <label htmlFor="theme-pick" className="field-label">Theme</label>
+                    <select id="theme-pick" value={themePick} onChange={(e) => setThemePick(e.target.value as ThemeId)}>
+                      {THEME_IDS.map((t) => <option key={t} value={t}>{THEME_LABELS[t] ?? t}</option>)}
+                    </select>
+                  </div>
+                  <button type="submit" className="btn btn-accent">Assign</button>
+                </form>
+                <div id="theme-error" className="status error" role="alert">{themeError}</div>
+                {siteThemes.length > 0 && (
+                  <ul className="sites" aria-label="Per-site themes">
+                    {siteThemes.map(([host, theme]) => (
+                      <li key={host}>
+                        <span><strong>{host}</strong> <span className="muted">→ {THEME_LABELS[theme] ?? theme}</span></span>
+                        <button type="button" className="btn btn-sm" aria-label={`Remove theme for ${host}`} onClick={() => void change((s) => { const r = { ...s.siteThemes }; delete r[host]; return { ...s, siteThemes: r }; }, `Removed per-site theme for ${host}`)}>Remove</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
                 <div className="field">
                   <label className="field-label">Search sites</label>
                   <input type="text" value={searchSites} placeholder="Filter excluded/forced sites..." onChange={(e) => setSearchSites(e.target.value)} />
@@ -436,7 +514,24 @@ export function Options() {
 
               <section className="card stack">
                 <h2>Compatibility Profiles</h2>
-                <p className="muted" style={{ fontSize: 12, margin: 0 }}>Choose rendering behavior for problematic sites. Gentle preserves more of the original design.</p>
+                <p className="muted" style={{ fontSize: 12, margin: 0 }}>Choose rendering behavior for problematic sites. Gentle never forces dark on natively dark pages; Aggressive themes more eagerly; Media-Only only dims media.</p>
+                <form className="row" onSubmit={saveCompat} noValidate style={{ alignItems: 'flex-end' }}>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label htmlFor="comp-host" className="field-label">Website for profile</label>
+                    <input id="comp-host" type="text" value={compHost} placeholder="example.com" aria-invalid={compError !== ''} aria-describedby="comp-error" onChange={(e) => setCompHost(e.target.value)} />
+                  </div>
+                  <div className="field" style={{ width: 160 }}>
+                    <label htmlFor="comp-mode" className="field-label">Profile</label>
+                    <select id="comp-mode" value={compMode} onChange={(e) => setCompMode(e.target.value as CompatibilityMode)}>
+                      <option value="auto">Auto</option>
+                      <option value="gentle">Gentle</option>
+                      <option value="aggressive">Aggressive</option>
+                      <option value="mediaOnly">Media only</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="btn btn-accent">Save profile</button>
+                </form>
+                <div id="comp-error" className="status error" role="alert">{compError}</div>
                 {Object.keys(settings.compatibility).length === 0 ? <p className="muted" style={{ fontSize: 12 }}>No custom profiles. All sites use automatic handling.</p> : (
                   <ul className="sites">
                     {Object.entries(settings.compatibility).map(([host, mode]) => (

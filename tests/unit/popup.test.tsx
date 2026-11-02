@@ -161,6 +161,39 @@ describe('options page', () => {
     render(<Options />);
     expect((await screen.findAllByText(/exact hostname/)).length).toBeGreaterThan(0);
   });
+
+  it('websites tab: applies a force-on rule, assigns a per-site theme, saves a compatibility profile', async () => {
+    render(<Options />);
+    fireEvent.click(await screen.findByRole('button', { name: /Websites/ }));
+
+    // force-on rule
+    fireEvent.change(await screen.findByLabelText('Website'), { target: { value: 'dark.example.com' } });
+    fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'on' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply rule' }));
+    await waitFor(() => expect(stored().siteRules).toEqual({ 'dark.example.com': 'on' }));
+
+    // per-site theme
+    fireEvent.change(screen.getByLabelText('Assign theme to website'), { target: { value: 'docs.example.com' } });
+    fireEvent.change(screen.getByLabelText('Theme'), { target: { value: 'nord' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }));
+    await waitFor(() => expect(stored().siteThemes).toEqual({ 'docs.example.com': 'nord' }));
+
+    // compatibility profile
+    fireEvent.change(screen.getByLabelText('Website for profile'), { target: { value: 'tricky.example.com' } });
+    fireEvent.change(screen.getByLabelText('Profile'), { target: { value: 'gentle' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+    await waitFor(() => expect(stored().compatibility).toEqual({ 'tricky.example.com': 'gentle' }));
+  });
+
+  it('websites tab: rejects an invalid hostname in the rule form and stores nothing', async () => {
+    render(<Options />);
+    fireEvent.click(await screen.findByRole('button', { name: /Websites/ }));
+    const websiteInputs = await screen.findAllByLabelText('Website');
+    fireEvent.change(websiteInputs[0]!, { target: { value: 'not a host!' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply rule' }));
+    expect((await screen.findAllByRole('alert')).some((a) => /Enter a website address/.test(a.textContent ?? ''))).toBe(true);
+    expect(stored()?.siteRules ?? {}).toEqual({});
+  });
 });
 
 void vi;

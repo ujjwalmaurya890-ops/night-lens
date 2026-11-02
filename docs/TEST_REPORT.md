@@ -7,22 +7,26 @@
 ## Unit Tests
 
 ```
-Test Files  7 passed (7)
-      Tests  559 passed (559)
-   Duration  ~13s (tests 53%, environment 37%, setup 7%)
+Test Files  8 passed (8)
+      Tests  573 passed (573)
+   Duration  ~15s
 ```
 
 ### Breakdown
 
 | Test File | Tests | Verified |
 |---|---|---|
-| `tests/unit/engine.test.ts` | 26 | Traversal, batching, dynamic content, quiescence (no feedback loop), large insertions (7500 nodes), native-dark detection, theme switching, restoration |
-| `tests/unit/popup.test.tsx` | 16 | Popup branding/status, global/site toggles, force-on, theme/sliders persistence, unsupported empty state, reset confirmation, storage failures, settings open, a11y names, site-switch disable; Options: add/list/remove sites, reject invalid, warmth slider + privacy text, exact-hostname doc |
-| `tests/unit/theme.test.ts` | 416 | Palette tokens for every theme (15) × brightness (60/100/120) × contrast (70/100/140) × warmth (0/100/60) — contrast floors enforced; charcoal-luminance, high-contrast stricter, system balanced, sepia warmer, dim media |
+| `tests/unit/engine.test.ts` | 30 | Traversal, batching, dynamic content, quiescence (no feedback loop), large insertions, native-dark detection, theme switching, restoration **+ performance settings honored (batchSize slices work, enableCache=false yields 0 cache hits, debounceMs gates re-evaluation)** |
+| `tests/unit/popup.test.tsx` | 18 | Popup branding/status, global/site toggles, force-on, theme/sliders persistence, unsupported empty state, reset confirmation, storage failures, settings open, a11y names, site-switch disable; Options: add/list/remove sites, reject invalid, warmth slider + privacy text, exact-hostname doc **+ Websites tab rule/theme/compatibility forms work and validate input** |
+| `tests/unit/theme.test.ts` | 416 | Palette tokens for every theme (15) × brightness × contrast × warmth — contrast floors enforced; charcoal-luminance, high-contrast stricter, system balanced, sepia warmer, dim media |
 | `tests/unit/color.test.ts` | 35 | parseColor (rgb/rgba/hex/hsl/color() spaces), modern spaces (oklch/oklab/lab/lch/display-p3) reference values, conversions, WCAG luminance/contrast, ensureContrast |
-| `tests/unit/shared.test.ts` | 40 | Hostname normalize/reject, getSiteMode exact matching, sanitizeSettings (repairs each field, drops unknown, __proto__ safe), storage persist/sanitize/write-failure/reset/subscribe, decide() (global off, exclude, force, system, global beats force), message validation |
+| `tests/unit/shared.test.ts` | 42 | Hostname normalize/reject, getSiteMode exact matching, sanitizeSettings (repairs each field, drops unknown, __proto__ safe), storage persist/sanitize/write-failure/reset/subscribe, decide() (global off, exclude, force, system, global beats force, **scheduled-off passthrough**, **isWithinSchedule overnight/00:00**), message validation |
+| `tests/unit/css.test.ts` | 6 | **Custom-CSS privacy sanitizer: remote url()/@import/@font-face/javascript:/expression()/behavior blocked; data: and #fragment allowed; oversize rejected; sanitizeSettings drops unsafe stored CSS** |
 | `tests/unit/ui-contrast.test.ts` | 22 | UI CSS parsed tokens ≥10, text on bg/surface etc. ≥4.5:1, control-border ≥3:1, reduced-motion, focus-visible |
 | `tests/unit/background.test.ts` | 4 | Badge update (OFF when disabled), command toggle, installed/startup handlers, storage failure handling |
+
+### E2E (Playwright, real Chromium)
+40 tests in `tests/e2e/extension.spec.ts` (fixtures + WCAG contrast audit + popup/options flows). **Not executed in this sandbox**: the Playwright browser CDN is unreachable from this environment and no full Chromium with extension support is installed; run `npm run test:e2e` in a normal dev environment (set `NIGHTLENS_CHROMIUM` if needed). The suite is unchanged and preserved.
 
 **No mocks leaked:** chromeMock provides storage, tabs, runtime, alarms; each test isolates via beforeEach.
 

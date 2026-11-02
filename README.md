@@ -92,7 +92,7 @@ npm run build          # → dist/
 |---|---|
 | `npm run build` | Production build to `dist/` |
 | `npm run typecheck` | `tsc --noEmit` strict |
-| `npm test` | 559 unit tests (Vitest + jsdom) |
+| `npm test` | 573 unit tests (Vitest + jsdom) |
 | `npm run test:e2e` | 40+ E2E in real Chromium with extension loaded (Playwright) |
 | `npm run verify` | typecheck + test + test:e2e |
 
