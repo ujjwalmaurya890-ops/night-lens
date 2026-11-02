@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Learn</title><style>
+body{margin:0;font:16px/1.6 "Helvetica Neue",sans-serif;color:#333;background:#fafafa}main{max-width:720px;margin:0 auto;padding:24px}
+h1{color:#1b5e20}h2{color:#0d47a1}.lesson{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px;margin:16px 0}
+.q label{display:block;margin:6px 0}.hint{background:#fff3e0;color:#5d4037;padding:8px}.prog{background:#e0e0e0;height:10px;border-radius:5px}.prog i{display:block;width:60%;height:10px;background:#43a047;border-radius:5px}
+.icon{width:20px;height:20px;vertical-align:middle}
+</style></head><body><main><h1><svg class="icon" id="ic" width="20" height="20" viewBox="0 0 20 20"><path id="icp" d="M10 1l3 6 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L1 8l6-1z" fill="#1b5e20"/></svg> Photosynthesis</h1>
+<div class="lesson"><h2>Lesson 3</h2><p>Plants convert light into chemical energy.</p><div class="prog"><i></i></div></div>
+<form class="lesson q"><fieldset><legend>Quick quiz</legend><label><input type="radio" name="a"> Mitochondria</label><label><input type="radio" name="a" checked> Chloroplast</label></fieldset><button type="button" id="check">Check answer</button></form>
+<div class="hint">Hint: think about where chlorophyll lives.</div>
+<canvas id="cv" width="300" height="120" style="border:1px solid #ccc"></canvas></main>
+<script>const c=document.getElementById('cv').getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,300,120);c.fillStyle='#1976d2';c.fillRect(20,40,40,70);c.fillRect(80,20,40,90);c.fillStyle='#000';c.font='12px sans-serif';c.fillText('Growth chart',20,14)</script></body></html>

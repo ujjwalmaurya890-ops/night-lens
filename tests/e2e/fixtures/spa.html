@@ -1,0 +1,4 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SPA</title><style>body{margin:0;font:16px system-ui;background:#fff;color:#222}.view{padding:24px;background:#f5f5f5}.view h2{color:#0b3d91}</style></head>
+<body><nav><a href="#/a" id="la">A</a> <a href="#/b" id="lb">B</a></nav><div id="app"></div>
+<script>function route(){const r=location.hash.slice(2)||'a';document.getElementById('app').innerHTML='<section class="view"><h2>View '+r.toUpperCase()+'</h2><p style="color:#555">Content for '+r+'</p></section>'}addEventListener('hashchange',route);route();
+window.bulk=(n)=>{const f=document.createDocumentFragment();for(let i=0;i<n;i++){const d=document.createElement('div');d.style.cssText='background:#fff;color:#333;padding:2px';d.innerHTML='<span style="color:#555">row '+i+'</span> <a href="#" style="color:#0645ad">x</a>';f.append(d)}document.body.append(f)}</script></body></html>

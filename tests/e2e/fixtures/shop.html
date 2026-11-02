@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Shop</title><style>
+body{margin:0;font:15px system-ui,sans-serif;color:#0f1111;background:#fff}header{background:#232f3e;color:#fff;padding:12px 24px}
+.grid{display:grid;grid-template-columns:repeat(2,240px);gap:16px;padding:24px}.card{border:1px solid #ddd;border-radius:8px;padding:12px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.price{color:#b12704;font-weight:700}.old{color:#767676;text-decoration:line-through}.badge{background:#cc0c39;color:#fff;padding:2px 6px;border-radius:3px;font-size:12px}
+.add{background:#ffd814;border:1px solid #fcd200;color:#0f1111;padding:8px 12px;border-radius:20px}.add[disabled]{background:#eee;color:#999;border-color:#ddd}
+select,input{padding:6px;border:1px solid #888;border-radius:4px;background:#fff;color:#0f1111}.stars{color:#de7921}
+</style></head><body><header>ShopCo — <a href="#c" style="color:#fff">Cart (2)</a></header>
+<div class="grid"><div class="card"><span class="badge">SALE</span><div style="height:60px;background:#e7e7e7"></div><h3>Desk lamp</h3><div class="stars">★★★★☆</div><div><span class="price">$24.99</span> <span class="old">$39.99</span></div>
+<label for="qty">Qty</label> <select id="qty"><option>1</option><option>2</option></select><p><button class="add" id="add">Add to cart</button></p></div>
+<div class="card"><h3>Notebook</h3><div class="stars">★★★☆☆</div><div class="price">$4.50</div><p>Out of stock</p><button class="add" id="oos" disabled>Add to cart</button><p><input id="zip" placeholder="ZIP code"></p></div></div></body></html>

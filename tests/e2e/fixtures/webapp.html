@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>App</title><style>
+body{margin:0;font:14px system-ui,sans-serif;color:#1f1f1f;background:#f3f2f1}.bar{position:fixed;top:0;left:0;right:0;height:48px;background:#0f6cbd;color:#fff;display:flex;align-items:center;padding:0 16px;gap:16px}
+.main{padding:64px 24px 24px}.panel{background:#fff;border:1px solid #e1dfdd;border-radius:6px;padding:16px;margin-bottom:16px}
+.tab{display:inline-block;padding:8px 12px;color:#605e5c;border-bottom:2px solid transparent}.tab.sel{color:#0f6cbd;border-color:#0f6cbd}
+.menu{position:absolute;background:#fff;border:1px solid #c8c6c4;box-shadow:0 4px 8px rgba(0,0,0,.2);padding:4px 0;width:160px}.menu div{padding:6px 12px}.menu div:hover{background:#f3f2f1}
+.tog{width:40px;height:20px;border-radius:10px;background:#8a8886;border:0;position:relative}.tog[aria-checked=true]{background:#0f6cbd}
+button.p{background:#0f6cbd;color:#fff;border:0;padding:6px 14px;border-radius:4px}button.s{background:#fff;color:#323130;border:1px solid #8a8886;padding:6px 14px;border-radius:4px}
+dialog{border:1px solid #c8c6c4;border-radius:8px;padding:16px;background:#fff;color:#1f1f1f}.msg-err{color:#a4262c}.msg-ok{color:#0e700e}
+textarea{width:300px;height:60px;border:1px solid #8a8886;background:#fff;color:#1f1f1f}ul#list li{padding:4px 0;color:#323130}
+</style></head><body><div class="bar"><strong>Workspace</strong><span>Docs</span><span>Tasks</span></div>
+<div class="main"><div class="panel"><span class="tab sel">Overview</span><span class="tab">Activity</span><span class="tab">Settings</span>
+<p><button class="p" id="open">Open dialog</button> <button class="s" id="more">More ▾</button> <button class="s" disabled id="dis">Disabled</button>
+<button class="tog" role="switch" aria-checked="true" aria-label="Notifications"></button></p>
+<div class="menu" style="position:relative;display:inline-block"><div>Rename</div><div>Duplicate</div><div class="msg-err">Delete</div></div>
+<p class="msg-ok">Saved successfully</p><p class="msg-err">⚠ Error: could not sync</p><textarea aria-label="Notes" placeholder="Write a note…"></textarea>
+<ul id="list"><li>Item 1</li></ul><button class="s" id="add">Add item</button></div></div>
+<dialog id="dlg" open><h3 style="margin-top:0">Confirm</h3><p>Are you sure you want to continue?</p><button class="p">OK</button> <button class="s">Cancel</button></dialog>
+<script>document.getElementById('add').onclick=()=>{const li=document.createElement('li');li.innerHTML='<span style="color:#444">Item '+(document.querySelectorAll('#list li').length+1)+'</span> <a href="#" style="color:#0f6cbd">link</a>';li.style.background='#fff';document.getElementById('list').append(li)}</script></body></html>

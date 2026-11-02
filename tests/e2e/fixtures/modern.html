@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Modern colours</title><style>
+/* Mirrors how Tailwind v4-style sites declare colours: oklch(), lab(), display-p3, color-mix() */
+body{margin:0;background:oklch(0.985 0 0);color:oklch(0.21 0.03 265);font:16px system-ui}
+header{background:oklch(1 0 0);border-bottom:1px solid oklch(0.92 0.004 286);padding:12px 24px}
+.card{background:lab(98 0 0);border:1px solid lab(88 0 0);margin:16px 24px;padding:16px;border-radius:8px}
+.muted{color:oklch(0.55 0.02 265)}a{color:oklch(0.5 0.2 262)}
+.btn{background:oklch(0.55 0.22 262);color:oklch(0.98 0 0);border:0;padding:8px 16px;border-radius:6px}
+.mix{background:color-mix(in oklab, white 80%, #09f);padding:12px;margin:0 24px}
+.p3{background:color(display-p3 0.98 0.98 1);color:color(display-p3 0.1 0.1 0.2);padding:12px;margin:16px 24px}
+.item:hover{background:oklch(0.9 0.05 20)}
+</style></head><body><header><strong>Modern UI</strong></header>
+<div class="card"><p>Primary text on an oklch background.</p><p class="muted">Muted oklch text, 0.55 lightness.</p><a href="#x">An oklch link</a> <button class="btn">Action</button></div>
+<div class="mix">color-mix() background</div><div class="p3">display-p3 colours</div><div class="item card" id="hov">Hover target</div></body></html>
