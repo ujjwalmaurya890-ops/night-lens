@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Docs</title><style>
+body{margin:0;font:15px/1.6 system-ui,sans-serif;color:#1f2328;background:#fff;display:flex}
+nav{width:220px;background:#f6f8fa;border-right:1px solid #d0d7de;padding:16px;min-height:100vh}nav a{display:block;color:#57606a;text-decoration:none;padding:4px 0}nav a.cur{color:#0969da;font-weight:600}
+article{padding:24px 32px;max-width:760px}code{background:#eff1f3;padding:2px 5px;border-radius:4px;font-family:monospace}
+pre{background:#f6f8fa;border:1px solid #d0d7de;padding:12px;border-radius:6px;overflow:auto}.k{color:#cf222e}.s{color:#0a3069}.c{color:#6e7781}.f{color:#8250df}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left}tr:nth-child(even){background:#f6f8fa}th{background:#eaeef2}
+.note{background:#ddf4ff;border-left:4px solid #0969da;padding:8px 12px}.warn{background:#fff8c5;border-left:4px solid #bf8700;padding:8px 12px}
+</style></head><body><nav><a class="cur" href="#a">Getting started</a><a href="#b">API reference</a><a href="#c">Changelog</a></nav>
+<article><h1>Getting started</h1><p>Install with <code>npm install widget</code>, then import it.</p>
+<pre><span class="k">const</span> w = <span class="f">create</span>(<span class="s">"hello"</span>); <span class="c">// create a widget</span></pre>
+<div class="note"><strong>Note:</strong> Requires Node 20+.</div><p></p><div class="warn">Warning: this API is experimental.</div>
+<table><tr><th>Option</th><th>Type</th><th>Default</th></tr><tr><td>size</td><td>number</td><td>10</td></tr><tr><td>mode</td><td>string</td><td>"fast"</td></tr><tr><td>debug</td><td>boolean</td><td>false</td></tr></table></article></body></html>
