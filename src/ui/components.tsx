@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { LIMITS } from '../shared/defaults';
-import { PREMIUM_THEME_META, PRESETS, buildTokens } from '../engine/palette';
+import { PREMIUM_THEME_META, PRESETS, themePreviewColors } from '../engine/palette';
 import { THEME_IDS, type Settings, type ThemeId } from '../shared/types';
+import { IconAlertTriangle, IconCheck, IconCheckCircle } from './icons';
 
 export const THEME_LABELS: Record<string, string> = (() => {
   const map: Record<string, string> = {};
@@ -16,12 +17,34 @@ export const THEME_LABELS: Record<string, string> = (() => {
   return map;
 })();
 
-export function Logo({ size = 22 }: { size?: number }) {
+export function Logo({ size = 28 }: { size?: number }) {
+  const iconSize = Math.round(size * 0.58);
   return (
-    <div className="brand-mark" style={{ width: size, height: size, borderRadius: size * 0.36 }}>
-      <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-        <circle cx="8" cy="8" r="7" fill="none" stroke="white" strokeWidth="1.3" opacity="0.9" />
-        <path d="M10.2 3.5a5 5 0 1 0 2.8 7.2A4.2 4.2 0 0 1 10.2 3.5z" fill="white" />
+    <div
+      className="brand-mark"
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.32) }}
+    >
+      <svg
+        width={iconSize}
+        height={iconSize}
+        viewBox="0 0 20 20"
+        fill="none"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <circle
+          cx="10"
+          cy="10"
+          r="8.25"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeOpacity="0.88"
+        />
+        <path
+          d="M12.4 4.5a5.85 5.85 0 1 0 3.1 8.65A4.85 4.85 0 0 1 12.4 4.5Z"
+          fill="currentColor"
+        />
+        <circle cx="13.9" cy="6.2" r="0.9" fill="#ffffff" fillOpacity="0.85" />
       </svg>
     </div>
   );
@@ -29,163 +52,672 @@ export function Logo({ size = 22 }: { size?: number }) {
 
 export function LogoFull() {
   return (
-    <div className="row-start">
-      <Logo size={30} />
+    <div className="options-brand-group">
+      <Logo size={32} />
       <div>
-        <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1 }}>NightLens</div>
-        <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 1 }}>Intelligent Dark Mode</div>
+        <div className="options-brand-title">NightLens</div>
+        <div className="options-brand-sub">Intelligent Dark Mode</div>
       </div>
     </div>
   );
 }
 
-export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}) {
   return (
-    <button type="button" role="switch" className="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)} />
+    <button
+      type="button"
+      role="switch"
+      className="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    />
   );
 }
 
-export function ThemeSelect({ value, onChange, id }: { value: ThemeId; onChange: (v: ThemeId) => void; id: string }) {
+export function ThemeSelect({
+  value,
+  onChange,
+  id,
+}: {
+  value: ThemeId;
+  onChange: (v: ThemeId) => void;
+  id: string;
+}) {
   return (
     <div className="field">
-      <label htmlFor={id} className="field-label">Theme</label>
+      <label htmlFor={id} className="field-label">
+        Theme
+      </label>
       <select id={id} value={value} onChange={(e) => onChange(e.target.value as ThemeId)}>
-        {THEME_IDS.map((t) => <option key={t} value={t}>{THEME_LABELS[t] ?? t}</option>)}
+        {THEME_IDS.map((t) => (
+          <option key={t} value={t}>
+            {THEME_LABELS[t] ?? t}
+          </option>
+        ))}
       </select>
     </div>
   );
 }
 
-export function Slider({ id, label, value, limit, onCommit }: { id: string; label: string; value: number; limit: { min: number; max: number; step: number }; onCommit: (v: number) => void }) {
+export function Slider({
+  id,
+  label,
+  value,
+  limit,
+  unit = '%',
+  hint,
+  onCommit,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  limit: { min: number; max: number; step: number };
+  unit?: string;
+  hint?: string;
+  onCommit: (v: number) => void;
+}) {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
   useEffect(() => {
     if (local === value) return;
-    const t = setTimeout(() => onCommit(local), 150);
+    const t = setTimeout(() => onCommit(local), 140);
     return () => clearTimeout(t);
   }, [local, value, onCommit]);
+
+  const span = limit.max - limit.min;
+  const fillPct = span > 0 ? Math.max(0, Math.min(100, ((local - limit.min) / span) * 100)) : 50;
+  const ariaText =
+    unit === '%'
+      ? `${local} percent`
+      : unit
+        ? `${local} ${unit}`
+        : String(local);
+
   return (
     <div className="field">
-      <div className="slider-row"><label htmlFor={id} className="field-label">{label}</label><span className="slider-value">{local}%</span></div>
+      <div className="slider-row">
+        <label htmlFor={id} className="field-label">
+          {label}
+        </label>
+        <span className="slider-value">
+          {local}
+          {unit}
+        </span>
+      </div>
       <div className="slider-track">
-        <input id={id} type="range" min={limit.min} max={limit.max} step={limit.step} value={local} aria-valuetext={`${local} percent`} onChange={(e) => setLocal(Number(e.target.value))} />
+        <input
+          id={id}
+          type="range"
+          min={limit.min}
+          max={limit.max}
+          step={limit.step}
+          value={local}
+          aria-valuetext={ariaText}
+          style={{ '--slider-fill': `${fillPct}%` } as CSSProperties}
+          onChange={(e) => setLocal(Number(e.target.value))}
+        />
+      </div>
+      {hint && <p className="field-hint">{hint}</p>}
+    </div>
+  );
+}
+
+export function HueSlider({
+  id,
+  label,
+  value,
+  onCommit,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  onCommit: (v: number) => void;
+}) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => setLocal(value), [value]);
+  useEffect(() => {
+    if (local === value) return;
+    const t = setTimeout(() => onCommit(local), 140);
+    return () => clearTimeout(t);
+  }, [local, value, onCommit]);
+
+  return (
+    <div className="field">
+      <div className="slider-row">
+        <label htmlFor={id} className="field-label">
+          {label}
+        </label>
+        <span
+          className="slider-value"
+          style={{
+            background: `hsl(${local} 72% 52% / 0.16)`,
+            borderColor: `hsl(${local} 72% 58% / 0.35)`,
+            color: `hsl(${local} 86% 74%)`,
+          }}
+        >
+          {local}°
+        </span>
+      </div>
+      <div className="slider-track">
+        <input
+          id={id}
+          type="range"
+          className="hue-range"
+          min={0}
+          max={360}
+          step={5}
+          value={local}
+          aria-valuetext={`${local} degrees`}
+          onChange={(e) => setLocal(Number(e.target.value))}
+        />
       </div>
     </div>
   );
 }
 
-export function HueSlider({ id, label, value, onCommit }: { id: string; label: string; value: number; onCommit: (v: number) => void }) {
-  const [local, setLocal] = useState(value);
-  useEffect(() => setLocal(value), [value]);
-  useEffect(() => {
-    if (local === value) return;
-    const t = setTimeout(() => onCommit(local), 150);
-    return () => clearTimeout(t);
-  }, [local, value, onCommit]);
-  return (
-    <div className="field">
-      <div className="slider-row"><label htmlFor={id} className="field-label">{label}</label><span className="slider-value" style={{ background: `hsl(${local} 70% 50% / 0.15)`, color: `hsl(${local} 80% 65%)` }}>{local}°</span></div>
-      <div className="slider-track">
-        <input id={id} type="range" min={0} max={360} step={5} value={local} style={{ background: `linear-gradient(90deg, hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%), hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%))`, height: 6, borderRadius: 999 }} onChange={(e) => setLocal(Number(e.target.value))} />
-      </div>
-    </div>
-  );
-}
-
-export function ThemeCard({ themeId, active, onSelect }: { themeId: string; active: boolean; onSelect: () => void }) {
+export function ThemeCard({
+  themeId,
+  active,
+  onSelect,
+}: {
+  themeId: string;
+  active: boolean;
+  onSelect: () => void;
+}) {
   const meta = PREMIUM_THEME_META[themeId];
-  const tokens = (() => {
-    try {
-      return buildTokens({ theme: themeId as any, brightness: 100, contrast: 100, sepia: 0, warmth: 0, saturation: 50, accentHue: 225 });
-    } catch { return null; }
-  })();
-  const preview = meta?.preview ?? (tokens ? { bg: `#${tokens.colors.bg.r.toString(16).padStart(2,'0')}${tokens.colors.bg.g.toString(16).padStart(2,'0')}${tokens.colors.bg.b.toString(16).padStart(2,'0')}`, text: `#${tokens.colors.text.r.toString(16).padStart(2,'0')}`, accent: `#${tokens.colors.link.r.toString(16).padStart(2,'0')}` } : { bg: '#17181b', text: '#ececee', accent: '#7ab7ff' });
+  const preview = themePreviewColors(themeId);
 
   return (
-    <button type="button" className={`theme-card ${active ? 'active' : ''}`} onClick={onSelect} aria-pressed={active} aria-label={`Select ${THEME_LABELS[themeId] ?? themeId} theme`}>
-      <div className="theme-preview" style={{ background: preview.bg, color: preview.text }}>
-        <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.9 }}>Aa</span>
-        <span style={{ width: 14, height: 14, borderRadius: 6, background: preview.accent, border: '1px solid rgba(255,255,255,0.2)' }} />
-        <span style={{ fontSize: 8, borderBottom: `1.5px solid ${preview.accent}`, paddingBottom: 1 }}>Link</span>
+    <button
+      type="button"
+      className={`theme-card ${active ? 'active' : ''}`}
+      onClick={onSelect}
+      aria-pressed={active}
+      aria-label={`Select ${THEME_LABELS[themeId] ?? themeId} theme`}
+    >
+      <div
+        className="theme-preview"
+        style={{ background: preview.bg, color: preview.text }}
+      >
+        <div className="theme-preview-sample">
+          <span className="theme-preview-aa">Aa</span>
+          <span className="theme-preview-bar" />
+        </div>
+        <div className="theme-preview-tokens">
+          <span
+            className="theme-preview-dot"
+            style={{ background: preview.accent }}
+          />
+          <span
+            className="theme-preview-link"
+            style={{
+              color: preview.accent,
+              borderBottom: `1.5px solid ${preview.accent}`,
+            }}
+          >
+            Link
+          </span>
+        </div>
       </div>
       <div className="theme-name">{THEME_LABELS[themeId] ?? themeId}</div>
-      <div className="theme-desc">{meta?.description ?? `${PRESETS[themeId]?.bgL ? `Luminance ${PRESETS[themeId].bgL.toFixed(2)}` : 'Custom theme'}`}</div>
-      {active && <div style={{ position: 'absolute', top: 8, right: 8, width: 16, height: 16, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff' }}>✓</div>}
+      <div className="theme-desc">
+        {meta?.description ??
+          (themeId === 'system'
+            ? 'Syncs automatically with OS dark appearance'
+            : themeId === 'custom'
+              ? 'User-defined custom color palette'
+              : PRESETS[themeId]?.bgL
+                ? `Luminance ${PRESETS[themeId].bgL.toFixed(2)}`
+                : 'Custom theme')}
+      </div>
+      {active && (
+        <div className="theme-check badge-pop" aria-hidden="true">
+          <IconCheck size={11} strokeWidth={2.5} />
+        </div>
+      )}
     </button>
   );
 }
 
-export function ThemeGrid({ value, onChange }: { value: ThemeId; onChange: (v: ThemeId) => void }) {
-  const premium = THEME_IDS.filter((t) => PREMIUM_THEME_META[t as string] || ['midnight', 'deepSpace', 'amoled', 'softDark', 'charcoal', 'graphite', 'solarized', 'nord', 'dracula', 'oledNight'].includes(t));
-  const legacy = ['balanced', 'highContrast', 'dim'] as ThemeId[];
-  const systemAndCustom = ['system', 'custom'] as ThemeId[];
+export function ThemeGrid({
+  value,
+  onChange,
+}: {
+  value: ThemeId;
+  onChange: (v: ThemeId) => void;
+}) {
+  const premium = THEME_IDS.filter((t) =>
+    [
+      'midnight',
+      'deepSpace',
+      'amoled',
+      'softDark',
+      'charcoal',
+      'graphite',
+      'solarized',
+      'nord',
+      'dracula',
+      'oledNight',
+    ].includes(t),
+  );
+  const essentials: ThemeId[] = ['balanced', 'highContrast', 'dim', 'system', 'custom'];
 
   return (
     <div className="stack">
-      <div className="field-label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>Premium Themes</div>
+      <div className="eyebrow">Curated Palettes</div>
       <div className="theme-grid">
-        {premium.map((t) => <ThemeCard key={t} themeId={t} active={value === t} onSelect={() => onChange(t)} />)}
+        {premium.map((t) => (
+          <ThemeCard
+            key={t}
+            themeId={t}
+            active={value === t}
+            onSelect={() => onChange(t)}
+          />
+        ))}
       </div>
-      <div className="field-label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginTop: 8 }}>Essentials</div>
+      <div className="eyebrow" style={{ marginTop: 6 }}>
+        Essentials &amp; System
+      </div>
       <div className="theme-grid">
-        {[...legacy, ...systemAndCustom].map((t) => <ThemeCard key={t} themeId={t} active={value === t} onSelect={() => onChange(t)} />)}
+        {essentials.map((t) => (
+          <ThemeCard
+            key={t}
+            themeId={t}
+            active={value === t}
+            onSelect={() => onChange(t)}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-export function AppearanceControls({ settings, onChange, showSepia, compact: _compact, compactThemeOnly }: { settings: Settings; onChange: (u: (s: Settings) => Settings, msg: string) => void; showSepia?: boolean; compact?: boolean; compactThemeOnly?: boolean }) {
-  const warmth = (settings as any).warmth ?? settings.sepia;
-  // For legacy test compat, popup shows Theme + Brightness + Contrast strength without extra sliders when compact
-  if (compactThemeOnly) {
+export function AppearanceControls({
+  settings,
+  onChange,
+  showSepia,
+  compact: _compact,
+  compactThemeOnly,
+  slidersOnly,
+}: {
+  settings: Settings;
+  onChange: (u: (s: Settings) => Settings, msg: string) => void;
+  showSepia?: boolean;
+  compact?: boolean;
+  compactThemeOnly?: boolean;
+  slidersOnly?: boolean;
+}) {
+  const warmth = settings.warmth ?? settings.sepia;
+  const suffix = showSepia ? 'o' : 'p';
+
+  if (slidersOnly) {
     return (
       <div className="stack">
-        <ThemeSelect id={`theme-${showSepia ? 'o' : 'p'}`} value={settings.theme} onChange={(theme) => onChange((s) => ({ ...s, theme }), `Theme set to ${THEME_LABELS[theme] ?? theme}.`)} />
-        <Slider id={`brightness-${showSepia ? 'o' : 'p'}`} label="Brightness" value={settings.brightness} limit={LIMITS.brightness} onCommit={(brightness) => onChange((s) => ({ ...s, brightness, sepia: warmth, warmth }), `Brightness set to ${brightness}%.`)} />
-        <Slider id={`contrast-${showSepia ? 'o' : 'p'}`} label="Contrast strength" value={settings.contrast} limit={LIMITS.contrast} onCommit={(contrast) => onChange((s) => ({ ...s, contrast }), `Contrast strength set to ${contrast}%.`)} />
+        <Slider
+          id={`brightness-${suffix}`}
+          label="Brightness"
+          value={settings.brightness}
+          limit={LIMITS.brightness}
+          onCommit={(brightness) =>
+            onChange(
+              (s) => ({ ...s, brightness, sepia: warmth, warmth }),
+              `Brightness set to ${brightness}%.`,
+            )
+          }
+        />
+        <Slider
+          id={`contrast-${suffix}`}
+          label="Contrast strength"
+          value={settings.contrast}
+          limit={LIMITS.contrast}
+          onCommit={(contrast) =>
+            onChange((s) => ({ ...s, contrast }), `Contrast strength set to ${contrast}%.`)
+          }
+        />
       </div>
     );
   }
+
+  if (compactThemeOnly) {
+    return (
+      <div className="stack">
+        <ThemeSelect
+          id={`theme-${suffix}`}
+          value={settings.theme}
+          onChange={(theme) =>
+            onChange((s) => ({ ...s, theme }), `Theme set to ${THEME_LABELS[theme] ?? theme}.`)
+          }
+        />
+        <Slider
+          id={`brightness-${suffix}`}
+          label="Brightness"
+          value={settings.brightness}
+          limit={LIMITS.brightness}
+          onCommit={(brightness) =>
+            onChange(
+              (s) => ({ ...s, brightness, sepia: warmth, warmth }),
+              `Brightness set to ${brightness}%.`,
+            )
+          }
+        />
+        <Slider
+          id={`contrast-${suffix}`}
+          label="Contrast strength"
+          value={settings.contrast}
+          limit={LIMITS.contrast}
+          onCommit={(contrast) =>
+            onChange((s) => ({ ...s, contrast }), `Contrast strength set to ${contrast}%.`)
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="stack">
-      <ThemeSelect id={`theme-${showSepia ? 'o' : 'p'}`} value={settings.theme} onChange={(theme) => onChange((s) => ({ ...s, theme }), `Theme set to ${THEME_LABELS[theme] ?? theme}.`)} />
-      <Slider id={`brightness-${showSepia ? 'o' : 'p'}`} label="Brightness" value={settings.brightness} limit={LIMITS.brightness} onCommit={(brightness) => onChange((s) => ({ ...s, brightness, sepia: warmth, warmth }), `Brightness set to ${brightness}%.`)} />
-      <Slider id={`contrast-${showSepia ? 'o' : 'p'}`} label={showSepia ? 'Contrast strength' : 'Contrast strength'} value={settings.contrast} limit={LIMITS.contrast} onCommit={(contrast) => onChange((s) => ({ ...s, contrast }), `Contrast strength set to ${contrast}%.`)} />
-      <Slider id={`warmth-${showSepia ? 'o' : 'p'}`} label={showSepia ? 'Warmth (sepia)' : 'Warmth'} value={warmth} limit={LIMITS.warmth} onCommit={(warmth) => onChange((s) => ({ ...s, warmth, sepia: warmth }), `Warmth set to ${warmth}%.`)} />
-      {showSepia && <Slider id={`saturation-o`} label="Saturation" value={(settings as any).saturation ?? 50} limit={LIMITS.saturation} onCommit={(saturation) => onChange((s) => ({ ...s, saturation } as any), `Saturation set to ${saturation}%.`)} />}
-      {showSepia && <Slider id={`textSize-o`} label="Text size" value={(settings as any).textSize ?? 100} limit={LIMITS.textSize} onCommit={(textSize) => onChange((s) => ({ ...s, textSize } as any), `Text size set to ${textSize}%.`)} />}
-      {showSepia && <HueSlider id="accentHue-o" label="Accent hue" value={(settings as any).accentHue ?? 225} onCommit={(accentHue) => onChange((s) => ({ ...s, accentHue } as any), `Accent hue set to ${accentHue}°.`)} />}
+      <ThemeSelect
+        id={`theme-${suffix}`}
+        value={settings.theme}
+        onChange={(theme) =>
+          onChange((s) => ({ ...s, theme }), `Theme set to ${THEME_LABELS[theme] ?? theme}.`)
+        }
+      />
+      <Slider
+        id={`brightness-${suffix}`}
+        label="Brightness"
+        value={settings.brightness}
+        limit={LIMITS.brightness}
+        onCommit={(brightness) =>
+          onChange(
+            (s) => ({ ...s, brightness, sepia: warmth, warmth }),
+            `Brightness set to ${brightness}%.`,
+          )
+        }
+      />
+      <Slider
+        id={`contrast-${suffix}`}
+        label="Contrast strength"
+        value={settings.contrast}
+        limit={LIMITS.contrast}
+        onCommit={(contrast) =>
+          onChange((s) => ({ ...s, contrast }), `Contrast strength set to ${contrast}%.`)
+        }
+      />
+      <Slider
+        id={`warmth-${suffix}`}
+        label={showSepia ? 'Warmth (sepia)' : 'Warmth'}
+        value={warmth}
+        limit={LIMITS.warmth}
+        onCommit={(nextWarmth) =>
+          onChange(
+            (s) => ({ ...s, warmth: nextWarmth, sepia: nextWarmth }),
+            `Warmth set to ${nextWarmth}%.`,
+          )
+        }
+      />
+      {showSepia && (
+        <Slider
+          id="saturation-o"
+          label="Saturation"
+          value={settings.saturation ?? 50}
+          limit={LIMITS.saturation}
+          onCommit={(saturation) =>
+            onChange((s) => ({ ...s, saturation }), `Saturation set to ${saturation}%.`)
+          }
+        />
+      )}
+      {showSepia && (
+        <Slider
+          id="textSize-o"
+          label="Text size"
+          value={settings.textSize ?? 100}
+          limit={LIMITS.textSize}
+          onCommit={(textSize) =>
+            onChange((s) => ({ ...s, textSize }), `Text size set to ${textSize}%.`)
+          }
+        />
+      )}
+      {showSepia && (
+        <HueSlider
+          id="accentHue-o"
+          label="Accent hue"
+          value={settings.accentHue ?? 225}
+          onCommit={(accentHue) =>
+            onChange((s) => ({ ...s, accentHue }), `Accent hue set to ${accentHue}°.`)
+          }
+        />
+      )}
     </div>
   );
 }
 
-export function StatusLine({ notice }: { notice: { kind: 'ok' | 'error'; text: string } | null }) {
+export function StatusLine({
+  notice,
+}: {
+  notice: { kind: 'ok' | 'error'; text: string } | null;
+}) {
   if (!notice) return <div className="status" role="status" aria-live="polite" />;
   return (
-    <div className={`status ${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'} aria-live="polite">
-      {notice.kind === 'ok' ? '✓ ' : '⚠ '}{notice.text}
+    <div
+      className={`status ${notice.kind} status-enter`}
+      role={notice.kind === 'error' ? 'alert' : 'status'}
+      aria-live="polite"
+    >
+      {notice.kind === 'ok' ? (
+        <IconCheckCircle size={15} />
+      ) : (
+        <IconAlertTriangle size={15} />
+      )}
+      <span>{notice.text}</span>
     </div>
   );
 }
 
-export function PresetChips({ onSelect }: { onSelect: (preset: { brightness: number; contrast: number; warmth: number }) => void }) {
-  const presets = [
-    { label: 'Default', brightness: 100, contrast: 100, warmth: 0 },
-    { label: 'Soft', brightness: 100, contrast: 90, warmth: 15 },
-    { label: 'Vivid', brightness: 100, contrast: 115, warmth: 0 },
-    { label: 'Warm Night', brightness: 95, contrast: 95, warmth: 25 },
-    { label: 'Cool', brightness: 105, contrast: 100, warmth: 0 },
-    { label: 'Dim', brightness: 80, contrast: 85, warmth: 10 },
-  ];
+export const QUICK_PRESETS = [
+  { label: 'Default', brightness: 100, contrast: 100, warmth: 0 },
+  { label: 'Soft', brightness: 100, contrast: 90, warmth: 15 },
+  { label: 'Vivid', brightness: 100, contrast: 115, warmth: 0 },
+  { label: 'Warm Night', brightness: 95, contrast: 95, warmth: 25 },
+  { label: 'Cool', brightness: 105, contrast: 100, warmth: 0 },
+  { label: 'Dim', brightness: 80, contrast: 85, warmth: 10 },
+] as const;
+
+export function PresetChips({
+  current,
+  onSelect,
+}: {
+  current?: { brightness: number; contrast: number; warmth: number };
+  onSelect: (preset: { brightness: number; contrast: number; warmth: number; label?: string }) => void;
+}) {
   return (
-    <div className="preset-row">
-      {presets.map((p) => (
-        <button key={p.label} type="button" className="preset-chip" onClick={() => onSelect(p)}>{p.label}</button>
-      ))}
+    <div className="preset-row" role="group" aria-label="Quick calibration presets">
+      {QUICK_PRESETS.map((p) => {
+        const isActive =
+          current !== undefined &&
+          current.brightness === p.brightness &&
+          current.contrast === p.contrast &&
+          current.warmth === p.warmth;
+        return (
+          <button
+            key={p.label}
+            type="button"
+            className={`preset-chip ${isActive ? 'active' : ''}`}
+            aria-pressed={current !== undefined ? isActive : undefined}
+            onClick={() => onSelect(p)}
+          >
+            {p.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-export function IconWrapper({ children, label }: { children: React.ReactNode; label?: string }) {
-  return <span aria-hidden={label ? undefined : true} aria-label={label} style={{ display: 'inline-flex', alignItems: 'center' }}>{children}</span>;
+/**
+ * Smooth CSS-Grid disclosure panel that starts unmounted when closed (keeping
+ * hidden controls out of the DOM and keyboard tab order) and animates both
+ * expansion and collapse cleanly.
+ */
+export function CollapsiblePanel({
+  open,
+  children,
+  className = '',
+}: {
+  open: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
+  const [mounted, setMounted] = useState(open);
+  const [phase, setPhase] = useState<'entering' | 'open' | 'closing'>(open ? 'open' : 'closing');
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      setPhase('entering');
+      const raf = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setPhase('open'));
+      });
+      return () => cancelAnimationFrame(raf);
+    } else if (mounted) {
+      setPhase('closing');
+      const t = setTimeout(() => setMounted(false), 185);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [open, mounted]);
+
+  if (!mounted) return null;
+
+  return (
+    <div className={`disclosure ${className}`.trim()} data-state={phase}>
+      <div className="disclosure-inner">{children}</div>
+    </div>
+  );
+}
+
+export function Tooltip({
+  content,
+  children,
+}: {
+  content: string;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <span className="tooltip-wrap" aria-describedby={id}>
+      {children}
+      <span id={id} role="tooltip" className="tooltip-bubble">
+        {content}
+      </span>
+    </span>
+  );
+}
+
+export function SectionCard({
+  icon,
+  title,
+  headingId,
+  headingLevel = 'h2',
+  action,
+  description,
+  variant = 'default',
+  compact = false,
+  spacing = 'stack',
+  className = '',
+  ariaLabel,
+  children,
+}: {
+  icon?: ReactNode;
+  title: string;
+  headingId?: string;
+  headingLevel?: 'h2' | 'h3';
+  action?: ReactNode;
+  description?: ReactNode;
+  variant?: 'default' | 'active' | 'positive' | 'subtle';
+  compact?: boolean;
+  spacing?: 'stack' | 'stack-lg';
+  className?: string;
+  ariaLabel?: string;
+  children: ReactNode;
+}) {
+  const variantClass =
+    variant === 'active'
+      ? 'card-active'
+      : variant === 'positive'
+        ? 'card-positive'
+        : variant === 'subtle'
+          ? 'card-subtle'
+          : '';
+  const Heading = headingLevel;
+
+  return (
+    <section
+      className={`card ${compact ? 'card-compact' : ''} ${spacing} ${variantClass} ${className}`.replace(
+        /\s+/g,
+        ' ',
+      ).trim()}
+      aria-label={ariaLabel}
+      aria-labelledby={!ariaLabel && headingId ? headingId : undefined}
+    >
+      <div className="card-header">
+        <div className="card-title-group">
+          {icon && <span className="card-icon">{icon}</span>}
+          <Heading id={headingId}>{title}</Heading>
+        </div>
+        {action}
+      </div>
+      {description && <p className="card-description">{description}</p>}
+      {children}
+    </section>
+  );
+}
+
+export function SettingRow({
+  title,
+  description,
+  control,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  control: ReactNode;
+}) {
+  return (
+    <div className="setting-row">
+      <div className="setting-row-info">
+        <span className="setting-row-title">{title}</span>
+        {description && <span className="setting-row-desc">{description}</span>}
+      </div>
+      {control}
+    </div>
+  );
+}
+
+export function IconWrapper({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label?: string;
+}) {
+  return (
+    <span
+      aria-hidden={label ? undefined : true}
+      aria-label={label}
+      style={{ display: 'inline-flex', alignItems: 'center' }}
+    >
+      {children}
+    </span>
+  );
 }

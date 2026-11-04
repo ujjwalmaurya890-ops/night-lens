@@ -1,0 +1,192 @@
+/* NightLens Centralized Motion System
+   Purposeful, GPU-friendly transform & opacity choreography.
+   Respects both OS prefers-reduced-motion and NightLens's own reducedMotion setting.
+*/
+
+:root {
+  /* Timing scale */
+  --duration-instant: 120ms;  /* 100–150ms: active press, immediate feedback */
+  --duration-fast: 175ms;     /* 150–200ms: hover, micro-interactions, chips, icons */
+  --duration-normal: 240ms;   /* 200–300ms: switches, inputs, cards, status toasts */
+  --duration-panel: 290ms;    /* 250–350ms: expandable panels, collapsible sections, tabs */
+  --duration-slow: 390ms;     /* 350–450ms: page & shell entry */
+
+  /* Easing curves */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Spatial distances & scales (zeroed out in reduced-motion) */
+  --motion-lift-sm: -1px;
+  --motion-lift-md: -1.5px;
+  --motion-press-scale: 0.975;
+  --motion-chip-press: 0.96;
+  --motion-enter-y: 6px;
+  --motion-panel-y: 4px;
+
+  /* Reusable composite transitions */
+  --transition-interactive:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-instant) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+
+  --transition-surface:
+    background-color var(--duration-normal) var(--ease-standard),
+    border-color var(--duration-normal) var(--ease-standard),
+    box-shadow var(--duration-normal) var(--ease-standard),
+    transform var(--duration-normal) var(--ease-standard);
+
+  --transition-field:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-normal) var(--ease-standard);
+}
+
+/* Keyframes — transform & opacity only for compositor smoothness */
+@keyframes nlShellEnter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-panel-y));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nlPanelEnter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-enter-y));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nlStatusEnter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-panel-y)) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes nlBadgePop {
+  from {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes nlSubtlePulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.52;
+  }
+}
+
+/* Entry & panel classes */
+.shell-enter {
+  animation: nlShellEnter var(--duration-normal) var(--ease-enter) both;
+}
+
+.animate-in,
+.panel-enter {
+  animation: nlPanelEnter var(--duration-panel) var(--ease-enter) both;
+}
+
+.status-enter {
+  animation: nlStatusEnter var(--duration-normal) var(--ease-enter) both;
+}
+
+.badge-pop {
+  animation: nlBadgePop var(--duration-fast) var(--ease-spring) both;
+}
+
+.pulse-subtle {
+  animation: nlSubtlePulse 1.8s var(--ease-standard) infinite;
+}
+
+/* Staggered card entrance */
+.stagger-1 { animation: nlPanelEnter var(--duration-panel) var(--ease-enter) 20ms both; }
+.stagger-2 { animation: nlPanelEnter var(--duration-panel) var(--ease-enter) 55ms both; }
+.stagger-3 { animation: nlPanelEnter var(--duration-panel) var(--ease-enter) 90ms both; }
+.stagger-4 { animation: nlPanelEnter var(--duration-panel) var(--ease-enter) 125ms both; }
+
+/* Smooth expandable / collapsible disclosure container */
+.disclosure {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows var(--duration-panel) var(--ease-standard),
+    opacity var(--duration-normal) var(--ease-enter);
+}
+
+.disclosure[data-state='entering'],
+.disclosure[data-state='closing'] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.disclosure[data-state='closing'] {
+  transition:
+    grid-template-rows var(--duration-fast) var(--ease-exit),
+    opacity var(--duration-instant) var(--ease-exit);
+}
+
+.disclosure-inner {
+  min-height: 0;
+  overflow: hidden;
+  transform: translateY(0);
+  transition: transform var(--duration-panel) var(--ease-enter);
+}
+
+.disclosure[data-state='entering'] .disclosure-inner,
+.disclosure[data-state='closing'] .disclosure-inner {
+  transform: translateY(-4px);
+}
+
+/* Rotating disclosure chevron */
+.chevron-icon {
+  transition: transform var(--duration-fast) var(--ease-standard);
+  flex-shrink: 0;
+}
+
+.chevron-icon[data-open='true'] {
+  transform: rotate(180deg);
+}
+
+/* Reduced motion via NightLens setting attribute */
+[data-reduced-motion='true'] {
+  --duration-instant: 60ms;
+  --duration-fast: 80ms;
+  --duration-normal: 80ms;
+  --duration-panel: 0.01ms;
+  --duration-slow: 0.01ms;
+  --motion-lift-sm: 0px;
+  --motion-lift-md: 0px;
+  --motion-press-scale: 1;
+  --motion-chip-press: 1;
+  --motion-enter-y: 0px;
+  --motion-panel-y: 0px;
+}
+
+[data-reduced-motion='true'] .pulse-subtle {
+  animation: none;
+}

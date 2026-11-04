@@ -194,6 +194,53 @@ describe('options page', () => {
     expect((await screen.findAllByRole('alert')).some((a) => /Enter a website address/.test(a.textContent ?? ''))).toBe(true);
     expect(stored()?.siteRules ?? {}).toEqual({});
   });
+
+  it('navigates across all settings tabs with accessible current state and live reduced-motion attribute', async () => {
+    const { container } = render(<Options />);
+    for (const label of ['Appearance', 'Themes', 'Websites', 'Accessibility', 'Automation', 'Performance', 'Privacy', 'About', 'Overview']) {
+      const navBtn = await screen.findByRole('button', { name: label });
+      fireEvent.click(navBtn);
+      expect(navBtn.getAttribute('aria-current')).toBe('page');
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accessibility' }));
+    const reducedSwitch = await screen.findByRole('switch', { name: 'Reduced motion' });
+    expect(container.querySelector('.dashboard')?.getAttribute('data-reduced-motion')).toBeNull();
+    fireEvent.click(reducedSwitch);
+    await waitFor(() => expect(stored().accessibility.reducedMotion).toBe(true));
+    expect(container.querySelector('.dashboard')?.getAttribute('data-reduced-motion')).toBe('true');
+  });
+});
+
+describe('popup expandable panels and micro-interactions', () => {
+  it('expands theme browser and advanced warmth controls smoothly and highlights active presets', async () => {
+    render(<App />);
+    await screen.findByText('news.example.com');
+
+    // Default preset chip reflects initial 100/100/0 calibration
+    const defaultChip = screen.getByRole('button', { name: 'Default' });
+    expect(defaultChip.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Warm Night' }));
+    await waitFor(() => expect(stored().warmth).toBe(25));
+    expect(screen.getByRole('button', { name: 'Warm Night' }).getAttribute('aria-pressed')).toBe('true');
+
+    // Expand ThemeGrid drawer
+    const browseBtn = screen.getByRole('button', { name: 'Browse' });
+    expect(browseBtn.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(browseBtn);
+    expect(screen.getByRole('button', { name: 'Hide' }).getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(await screen.findByRole('button', { name: 'Select Nord theme' }));
+    await waitFor(() => expect(stored().theme).toBe('nord'));
+
+    // Expand More adjustments drawer
+    const moreBtn = screen.getByRole('button', { name: 'More' });
+    fireEvent.click(moreBtn);
+    expect(screen.getByRole('button', { name: 'Less' }).getAttribute('aria-expanded')).toBe('true');
+    const warmthSlider = await screen.findByLabelText('Warmth');
+    expect(warmthSlider.getAttribute('style')).toContain('--slider-fill:');
+    fireEvent.change(warmthSlider, { target: { value: '40' } });
+    await waitFor(() => expect(stored().warmth).toBe(40));
+  });
 });
 
 void vi;
