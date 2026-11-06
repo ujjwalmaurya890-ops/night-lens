@@ -77,12 +77,26 @@ describe('enabling', () => {
     expect(owned()[0]!.textContent).toContain('a[data-nl-link]:visited');
   });
 
-  it('leaves author-controlled backgrounds (images/gradients) and their text alone', async () => {
-    page(`<section id="hero" style="background-image:linear-gradient(#000,#333);color:#ffffff"><h1 id="t" style="color:#ffffff">Title</h1></section>`);
+  it('leaves non-gradient background images and their text alone', async () => {
+    page(`<section id="hero" style="background-image:url(hero.jpg);color:#ffffff"><h1 id="t" style="color:#ffffff">Title</h1></section>`);
     run();
     await settle();
     expect(document.getElementById('hero')!.hasAttribute('data-nl-bg')).toBe(false);
     expect(document.getElementById('t')!.hasAttribute('data-nl-fg')).toBe(false);
+  });
+
+  it('remaps gradient stops and shadows without changing their geometry', async () => {
+    page(`<section id="hero" style="background-image:linear-gradient(45deg, #ffffff 0%, #eeeeee 100%);color:#111;box-shadow:0 4px 8px rgba(255,255,255,.4)">Title</section>`);
+    run();
+    await settle();
+    const hero = document.getElementById('hero')!;
+    expect(hero.hasAttribute('data-nl-gradient')).toBe(true);
+    expect(hero.hasAttribute('data-nl-shadow')).toBe(true);
+    expect(hero.hasAttribute('data-nl-fg')).toBe(true);
+    const css = [...document.querySelectorAll('style[data-nl-owned]')].map((s) => s.textContent).join('');
+    expect(css).toContain('linear-gradient(45deg, rgb(');
+    expect(css).toContain('0 4px 8px rgba(');
+    expect(css).not.toContain('#ffffff 0%');
   });
 
   it('recolours small inline SVG icons but not large illustrations', async () => {

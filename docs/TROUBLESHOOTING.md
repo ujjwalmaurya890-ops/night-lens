@@ -31,8 +31,8 @@ npm install
 
 ## Appearance Issues
 
-**Light islands / gradients remain light**
-- By design — gradients/images left as authored. Use **per-site exclusion** or **custom CSS** to adjust.
+**Light islands or image backgrounds remain light**
+- Literal gradient stops are remapped, but non-gradient background images are left as authored. Unknown gradient color syntax may also remain. Use **per-site exclusion** or trusted **custom CSS** to adjust a specific site.
 
 **Dark logo unreadable**
 - Exclude site or add custom CSS: `img[src*="logo"]{filter:brightness(1.2)}` (example).
@@ -67,9 +67,9 @@ npm install
 - Disable **Developer Mode** (adds overhead).
 
 **Schedule not triggering**
-- Enable schedule + set valid HH:MM times.
-- Check service worker alarms (`chrome://extensions` → Service worker).
-- If OS sleep, may delay up to 1 min.
+- Enable the schedule and set valid HH:MM times.
+- Keep a matching page open and active enough for its content-script timer to run; hidden pages skip schedule checks.
+- After changing schedule settings, allow up to one minute for the next check.
 
 ## Keyboard & Accessibility
 

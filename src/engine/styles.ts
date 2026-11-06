@@ -8,9 +8,11 @@ const hex = (c: Parameters<typeof toHex>[0]): string => `#${toHex(c)}`;
  * !important is used so the theme wins over author styles; the engine records every element's
  * original colours before applying anything, and removing the <style> elements restores the page.
  */
-export function buildBaseCss(t: ThemeTokens, opts?: { readingMode?: { enabled: boolean; fontSize: number; lineHeight: number; maxWidth: number; fontFamily: string }; customCSS?: string; underlineLinks?: boolean; reduceMotion?: boolean; highContrast?: boolean }): string {
+export function buildBaseCss(t: ThemeTokens, opts?: { readingMode?: { enabled: boolean; fontSize: number; lineHeight: number; maxWidth: number; fontFamily: string }; customCSS?: string; underlineLinks?: boolean; reduceMotion?: boolean; highContrast?: boolean; mediaOnly?: boolean }): string {
   const c = t.colors;
-  const media = t.mediaBrightness < 1 ? `:where(img,video,picture){filter:brightness(${t.mediaBrightness})}` : '';
+  // Photographs and videos are untouched in normal themes. Media-only is an
+  // explicit compatibility mode, so only that opt-in profile applies dimming.
+  const media = opts?.mediaOnly ? ':where(img,video){filter:brightness(0.88) !important}' : '';
   const base = [
     `:root{color-scheme:dark !important;--nl-bg:${hex(c.bg)};--nl-bg-raised:${hex(c.bgRaised)};--nl-text:${hex(c.text)};--nl-muted:${hex(c.textMuted)};--nl-link:${hex(c.link)};--nl-visited:${hex(c.linkVisited)};--nl-border:${hex(c.border)};--nl-focus:${hex(c.focus)};--nl-sel-bg:${hex(c.selectionBg)};--nl-sel-fg:${hex(c.selectionText)}}`,
     'html:not([data-nl-ready]){background-color:var(--nl-bg) !important;color:var(--nl-text) !important}',

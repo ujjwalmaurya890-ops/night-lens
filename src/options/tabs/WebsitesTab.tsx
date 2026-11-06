@@ -60,6 +60,7 @@ export function WebsitesTab({
   const [compError, setCompError] = useState('');
   const [cssInput, setCssInput] = useState('');
   const [cssHost, setCssHost] = useState('');
+  const [confirmResetAll, setConfirmResetAll] = useState(false);
 
   const query = searchSites.trim().toLowerCase();
   const filteredExcluded = excluded.filter((h) => h.includes(query));
@@ -125,8 +126,8 @@ export function WebsitesTab({
         <h1>Website Management</h1>
         <p className="page-lead">
           Configure per-domain exclusions, forced theming, palettes, and rendering
-          profiles. Rules use exact hostname matching — <code>example.com</code> does not
-          cover <code>www.example.com</code>.
+          profiles. A rule for <code>example.com</code> also covers its subdomains;
+          the closest matching hostname wins.
         </p>
       </div>
 
@@ -134,7 +135,7 @@ export function WebsitesTab({
         icon={<IconGlobe size={15} />}
         title="Add Website Rule"
         spacing="stack-lg"
-        description="Rules match the exact hostname. Ports, schemes and paths are ignored."
+        description="Rules inherit to subdomains, with exact-host rules taking priority. Ports, schemes and paths are ignored."
       >
         <form className="form-inline" onSubmit={onAddExcluded} noValidate>
           <div className="field">
@@ -582,6 +583,34 @@ export function WebsitesTab({
               </li>
             ))}
           </ul>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Reset Website Preferences"
+        description="Remove all site rules, theme assignments, visual overrides, compatibility profiles, and custom CSS. Global appearance settings are kept."
+      >
+        {!confirmResetAll ? (
+          <button type="button" className="btn btn-danger" onClick={() => setConfirmResetAll(true)}>
+            Reset website preferences…
+          </button>
+        ) : (
+          <div className="row-start" role="group" aria-label="Confirm website preference reset">
+            <button type="button" className="btn" onClick={() => setConfirmResetAll(false)}>Cancel</button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => {
+                setConfirmResetAll(false);
+                onChange(
+                  (s) => ({ ...s, siteRules: {}, siteThemes: {}, siteOverrides: {}, compatibility: {}, customCSS: {} }),
+                  'All website preferences were reset.',
+                );
+              }}
+            >
+              Reset websites
+            </button>
+          </div>
         )}
       </SectionCard>
     </>

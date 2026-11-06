@@ -11,14 +11,14 @@
 | **Engine core** (traversal, batching, queue dedup, restore) | `engine/engine.ts` | ✓ 26 tests incl. large batch 7500 nodes, quiescence (no loop), style-load rescan | — | Enabled→restores exact outerHTML; snapshot vs disabled | |
 | **Dynamic content** (MutationObserver childList/class/style, shadow roots, SPA nav, resource load) | `engine/engine.ts` | ✓ Dynamic content 5, theme switch | — | SPA navigation, lazy-load/infinite scroll (fixture) | |
 | **Special content** (img/video not touched, canvas plate, SVG icons, shadow DOM) | `engine/engine.ts` | ✓ SVG chart/icon tests | — | Images/video filter none (balanced), canvas plate white, SVG recolor | |
-| **Hostname rules** (exact, no subdomain, normalize, __proto__ safe, limit 2000) | `shared/hostname.ts` | ✓ 40 tests | — | Per-site exclude still themes other origins | |
+| **Hostname rules** (nearest parent domain, exact override, IP/single-label exact, normalize, __proto__ safe, limit 2000) | `shared/hostname.ts` | ✓ 40 tests | — | Per-site exclude still themes other origins | |
 | **Sanitization** (type/range, MAX_SITE_RULES, customThemes 50, customCSS 20k, schedule, a11y, reading, performance) | `shared/storage.ts` | ✓ 40 shared tests + sanitizeSettings | — | Persist across reloads | |
 | **Decision** (enabled, siteMode off/on, system, schedule, forceNative) | `shared/decision.ts` | ✓ 6 decide tests (global off, exclude, force, system) + isWithinSchedule | — | System follow + schedule off verified | |
 | **Messages** (validation, sender.id check) | `shared/messages.ts` | ✓ 1 test + chromeMock | — | Popup ignores other tabs/frames | |
 | **Storage** (load/update/reset/subscribe, failure surfacing) | `shared/storage.ts` | ✓ 4 tests | — | Persist, reset, failure honest | |
-| **Background** (badge, command toggle Alt+Shift+D, installed/startup, alarms) | `background/handlers.ts` | ✓ 4 tests + command registration e2e | — | Badge OFF when disabled; alarm created | |
+| **Background** (badge, command toggle Alt+Shift+D, installed/startup) | `background/handlers.ts` | ✓ 4 tests + command registration e2e | — | Badge OFF when disabled | |
 | **Popup UI** (branding, site status, toggle, theme selector, sliders, reset, settings link, accessible) | `popup/App.tsx` + `ui/components` | ✓ 12 popup tests (branding, toggles, theme/sliders, unsupported, reset, storage failure, settings open, a11y, disable site switch) | ✓ | Status push from content | |
-| **Options Dashboard** (overview, appearance, themes, sites, a11y, automation, performance, privacy, about) | `options/Options.tsx` | ✓ 4 options tests (add/list/remove, reject invalid, warmth slider+privacy text, exact-hostname doc) | ✓ | — | |
+| **Options Dashboard** (overview, appearance, themes, sites, a11y, automation, performance, privacy, about) | `options/Options.tsx` | ✓ 4 options tests (add/list/remove, reject invalid, warmth slider+privacy text, subdomain-inheritance doc) | ✓ | — | |
 | **Themes** (10 premium, create/edit/delete/export/import, per-site themes, custom themes) | `palette.ts` + `storage.ts` + `Options` | ✓ via palette + theme.test | ✓ | Theme switching live, highContrast/dim contrast floors | |
 | **Brightness/Contrast/Warmth/Saturation/TextSize/AccentHue** sliders | `ui/components` + `palette` | ✓ via palette extremes | ✓ Popup sliders write settings | Slider extremes still AA (e2e) | |
 | **Preset chips** (Default/Soft/Vivid/Warm Night/Cool/Dim) | `ui/components` | — | — | Click applies | |
@@ -34,4 +34,4 @@
 | **Reset** (confirmed, restores defaults + clears rules) | `storage` + `ui` | ✓ popup reset test | — | — | |
 | **UI contrast** (own UI WCAG AA, focus visible, reduced motion) | `ui/ui.css` | ✓ 22 tests (text/bg, control-border, focus, reduced-motion, outline) | — | — | |
 
-**Coverage:** 573 unit tests pass; E2E suite covers core flows on 12 fixture pages.
+**Coverage:** See `TEST_REPORT.md` for current executed counts. E2E uses local fixture pages; live-site universality is not claimed.

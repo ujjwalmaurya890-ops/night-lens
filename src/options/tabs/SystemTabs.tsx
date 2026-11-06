@@ -719,7 +719,7 @@ export function AboutTab({ version }: { version: string }) {
               <IconInfo size={14} />
             </span>
             <span>
-              Authored CSS gradients and background images remain untouched to protect
+              Literal CSS gradient stops are remapped; background images remain untouched to protect
               artwork
             </span>
           </li>

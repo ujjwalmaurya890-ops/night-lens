@@ -53,7 +53,7 @@ npm run build
 | `npm install` | Install deps (React only for UI; content script has none) |
 | `npm run build` | Bundles popup/settings (Vite multi-page, minified) + content.js/background.js (IIFE) + manifest (version from package.json) + icons → `dist/` |
 | `npm run typecheck` | `tsc --noEmit` strict (noUnusedLocals, etc.) |
-| `npm test` | 559 unit tests (Vitest jsdom) |
+| `npm test` | Unit/integration tests (Vitest + jsdom) |
 | `npm run test:e2e` | Rebuilds, then ~40 E2E in real Chromium with extension loaded (Playwright) |
 | `npm run verify` | typecheck + test + test:e2e |
 
@@ -70,7 +70,7 @@ npm run build
 - **Popup console:** Right-click NightLens icon → Inspect popup.
 - **Options console:** Open settings → F12.
 - **Content script console:** F12 on any web page → filter `[NightLens]`.
-- **Service worker:** `chrome://extensions` → NightLens → **Service worker** (inspect) → check `chrome.storage.local` and alarms.
+- **Service worker:** `chrome://extensions` → NightLens → **Service worker** (inspect) → check `chrome.storage.local`.
 - **Check storage:** DevTools → Application → Storage → Extension Storage.
 - **Logs when developerMode on:** Enable in Settings → Performance → Developer Mode → open page console for `[NightLens] Engine stats`.
 
@@ -94,7 +94,7 @@ npm run build
 
 ## E2E Chromium Binary
 
-Default `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` (CI). Override:
+The default is Playwright's installed Chromium (`npx playwright install chromium`). Override:
 
 ```bash
 NIGHTLENS_CHROMIUM=/path/to/chrome npm run test:e2e
@@ -107,5 +107,5 @@ Generated via `scripts/make-icons.mjs` (no deps, pure JS PNG). Icons are simple,
 
 ## Permissions
 
-From `dist/manifest.json`: `storage`, `alarms`, `content_scripts` on `http/https`, `Alt+Shift+D` command. No remote code, no extra hosts. See `SECURITY_AND_PRIVACY.md`.
+From `dist/manifest.json`: `storage`, `content_scripts` on `http/https`, `Alt+Shift+D` command. No remote code, no extra hosts. See `SECURITY_AND_PRIVACY.md`.
 

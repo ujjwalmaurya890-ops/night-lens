@@ -1,24 +1,29 @@
 import { MAX_CUSTOM_CSS_LENGTH } from './defaults';
 
 /**
- * Sanitizes user-supplied per-site custom CSS before it is injected into a page.
- * Privacy-first: the page must never be able to trigger an external network request
- * through NightLens, so remote url() references, @import, @font-face, javascript:
- * and expression() are all rejected. Only inline data: URLs and SVG fragment refs
- * (url(#id)) are allowed.
+ * Conservative custom-CSS validation. NightLens never needs remote resources,
+ * so only fragment references and base64 raster data images are accepted in
+ * url(). Comments and escapes are rejected to avoid obfuscated-token bypasses.
+ * This is a privacy guard, not a sandbox: imported CSS can still alter layout.
  */
 export function sanitizeCustomCss(css: string): string {
-  if (!css || !css.trim()) return '';
-  if (css.length > MAX_CUSTOM_CSS_LENGTH) return '';
+  if (!css || !css.trim() || css.length > MAX_CUSTOM_CSS_LENGTH) return '';
+  if (/[\\\0-\x08\x0b\x0c\x0e-\x1f]/.test(css) || css.includes('/*') || css.includes('*/')) return '';
+
   const lower = css.toLowerCase();
-  if (lower.includes('javascript:') || lower.includes('expression(') || lower.includes('@import') || lower.includes('@font-face') || lower.includes('behavior:') || lower.includes('-moz-binding')) return '';
-  // Block url() unless it is a data: URI or an in-document fragment reference.
+  const forbidden = ['javascript:', 'expression(', '@import', '@font-face', 'behavior:', '-moz-binding'];
+  if (forbidden.some((token) => lower.includes(token))) return '';
+
   const urlRe = /url\(\s*(['"]?)([^'")]*)\1\s*\)/g;
-  let m: RegExpExecArray | null;
-  while ((m = urlRe.exec(css)) !== null) {
-    const target = m[2]!.trim().toLowerCase();
-    if (target.startsWith('data:') || target.startsWith('#')) continue;
+  let match: RegExpExecArray | null;
+  while ((match = urlRe.exec(css)) !== null) {
+    const target = match[2]!.trim().toLowerCase();
+    if (target.startsWith('#')) continue;
+    if (/^data:image\/(?:png|gif|jpeg|webp);base64,[a-z0-9+/=\s]+$/.test(target)) continue;
     return '';
   }
-  return css.slice(0, MAX_CUSTOM_CSS_LENGTH);
+  // Also reject malformed/url-like constructs the extractor did not recognize.
+  const withoutValidUrls = css.replace(urlRe, '');
+  if (/url\s*\(/i.test(withoutValidUrls)) return '';
+  return css;
 }

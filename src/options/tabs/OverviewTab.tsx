@@ -214,9 +214,8 @@ export function OverviewTab({
         }
         description={
           <>
-            Rules match the exact hostname. <code>example.com</code> does not cover{' '}
-            <code>www.example.com</code> or <code>docs.example.com</code>; add each one you
-            want. Ports, schemes and paths are ignored.
+            Rules inherit to subdomains, and the closest matching hostname wins. Ports,
+            schemes and paths are ignored.
           </>
         }
       >

@@ -1,193 +1,138 @@
-# NightLens — Premium Intelligent Dark Mode
+# NightLens
 
-> **Transform every website into a comfortable dark interface while preserving its original design, readability, and brand identity.**
+**Intelligent, customizable dark mode for Chromium — locally processed and privacy-first.**
 
-NightLens is a production-ready, privacy-first Chrome extension that intelligently remaps light websites into meticulously crafted dark themes — never inverting blindly, always guaranteeing readability.
+NightLens is a Manifest V3 browser extension that remaps light page colors to readable dark palettes. It uses computed styles and contrast-aware color mapping rather than blindly inverting the page. Photographs, videos, canvases, and large illustrations receive special handling.
 
-Built with **TypeScript · React 19 · Vite · Chrome Manifest V3** — strict, minimal, and auditable.
+Built with **TypeScript, React, Vite, Vitest, and Playwright**.
 
----
+## Features
 
-## ✨ Premium Experience
+### Contrast-aware dark engine
 
-### 🎨 10 Crafted Themes
-- **Midnight** — Deep blue-black, balanced
-- **Deep Space** — Rich indigo
-- **AMOLED** — Pure black, battery-saving
-- **Soft Dark** — Warm charcoal, gentle on eyes
-- **Charcoal** — Neutral professional gray
-- **Graphite** — Cool medium-dark
-- **Solarized** — Scientific precision
-- **Nord** — Arctic frosted blues
-- **Dracula** — Vibrant twilight purple
-- **OLED Night** — True black with crisp highlights
-- Plus **Custom** — create, save, export, import your own with color pickers.
+- Detects light and native-dark pages.
+- Maps backgrounds, text, links, borders, and small SVG icons through theme tokens.
+- Remaps literal CSS gradient stops and shadow colors while preserving geometry.
+- Resolves alpha-blended ancestor backgrounds and enforces configured text-contrast targets where the engine can determine the backdrop.
+- Leaves non-gradient background images and their descendant colors unchanged to avoid unreadable overlays.
 
-Instant preview, per-website theme assignment, and live switching.
+### Themes and visual controls
 
-### 🎛️ Complete Personalization
-- **Brightness** · **Contrast** · **Warmth** · **Saturation** · **Text Size** · **Accent Hue**
-- Live preview, meaningful effect, instantly persisted.
-- Preset chips: Default, Soft, Vivid, Warm Night, Cool, Dim.
+Ten curated palettes — **Midnight, Deep Space, AMOLED, Soft Dark, Charcoal, Graphite, Solarized, Nord, Dracula, and OLED Night** — plus legacy palettes, system-following mode, and custom themes.
 
-### 🌐 Intelligent Website Management
-- Exact-hostname matching (`example.com` ≠ `www.example.com`, no inheritance).
-- **Whitelist / Blacklist** with per-site exclude / force-on.
-- Per-domain theme, per-domain overrides (brightness/contrast/warmth).
-- Compatibility profiles: **Auto · Gentle · Aggressive · Media-Only**.
-- Custom CSS per domain (validated, no `@import`/`javascript:`).
+Adjust **brightness, contrast, warmth, saturation, accent hue, and text size**. Changes are stored locally and update open pages. Brightness affects webpage rendering only; it does not change hardware display brightness. **Midnight** is the fresh-install default.
 
-### ⏰ Automation
-- **Schedule:** Enable dark mode during selected hours (e.g., 22:00–07:00, overnight supported).
-- **System Integration:** Follow `prefers-color-scheme`, respond to OS changes, manual override.
-- **Per-site memory:** Remembers and restores every domain’s preferences.
+Custom themes can be created, edited, imported, and exported. Full settings backup/restore is also available.
 
-### 📖 Smart Reading Mode
-Distraction-free typography: adjustable font size, line height, max width (600–900px), font family (System/Serif/Sans/Dyslexic). Hides navigation/ads visually.
+### Website controls
 
-### ♿ Accessibility — Core, Not Afterthought
-- **WCAG AA (4.5:1) and AAA (7:1) contrast guarantees** — enforced per-element via `ensureContrast`.
-- High-contrast toggle, link underlining, reduced-motion support.
-- Color-blind-friendly palettes (protanopia/deuteranopia/tritanopia aware via accent hues).
-- Keyboard-navigable, visible focus rings, screen-reader labels, `role=switch`.
+- Global on/off switch and per-site exclude/force-on rules.
+- A rule for `example.com` covers `docs.example.com`; the closest hostname wins.
+- Per-site themes, visual overrides, compatibility profiles, and sanitized custom CSS inherit the same way.
+- IP addresses and single-label hostnames match exactly; suffix lookalikes such as `notexample.com` never match `example.com`.
+- Reset website preferences without resetting global appearance.
 
-### ⚡ Performance — Lightweight by Design
-- One forced style recalc per batch (strip → read → write).
-- Set-deduplicated queue, WeakSet processed tracking, 400 elements/frame (tunable).
-- MutationObserver filtered to color-relevant changes only; no feedback loops.
-- Shadow DOM per-root contexts, SPA navigation detection (history patch + popstate/hashchange).
-- Duplicate rule prevention (max 5000, then reset).
+### Dynamic pages and media protection
 
-### 🔒 Privacy-First — Local Only
-- **Only `storage` + `alarms` permissions.** No `tabs`, `history`, `cookies`, `webRequest`.
-- Settings stay in `chrome.storage.local` (`nightlens:settings`), never leave device.
-- No fetch/XHR/WebSocket/eval/innerHTML — grep-verified.
-- No analytics, telemetry, or remote config.
-- See [Security & Privacy](docs/SECURITY_AND_PRIVACY.md).
+- Batched `MutationObserver` processing for inserted content, inline style changes, and open shadow roots.
+- SPA history/hash navigation handling and late-stylesheet reprocessing.
+- Deduplicated queues, bounded traversal, parsed-color caching, and configurable batch/debounce settings.
+- Images, videos, audio, picture sources, iframes, objects, and embeds are not recolored.
+- Large canvases and text-bearing SVG charts retain an appropriate original backdrop; large illustrations are not repainted.
+- The explicit **Media only** compatibility profile dims images/videos without recoloring page surfaces. Normal themes do not filter media.
 
-### 🧩 Advanced Features
-- **Theme import/export** (portable JSON)
-- **Backup/restore** (export all settings)
-- **Quick toggle** — `Alt+Shift+D` (rebindable at `chrome://extensions/shortcuts`)
-- **Per-website theme profiles**
-- **Dynamic native-dark detection** — leaves already-dark sites alone (force-on override)
-- **Developer Mode** — `data-nl-dev` annotations + console stats
-- **Reset controls** — confirmed, restores defaults and clears site rules
+### Accessibility and controls
 
----
+- Keyboard-navigable popup/options UI with semantic controls, accessible names, live status messages, and visible focus.
+- High-contrast mode, link underlining, and reduced-motion support (including the OS preference).
+- **`Alt+Shift+D`** toggles NightLens globally. Rebind it at `chrome://extensions/shortcuts` where supported.
+- Optional schedules, system appearance integration, reading mode, and local developer diagnostics.
 
-## 🚀 Quick Start
+### Privacy
 
-**Requirements:** Node ≥ 22.12 (tested on 22.22.2), Chrome/Chromium.
+Settings stay in `chrome.storage.local` under `nightlens:settings`. NightLens has no analytics, tracking, remote configuration, or browsing-history collection. Computed page colors remain in memory.
+
+The only requested extension permission is **`storage`**. HTTP/HTTPS content-script access is required to restyle pages. No `tabs`, `history`, `cookies`, `webRequest`, host permissions, remote scripts, or externally connectable messaging are requested. See [Security & Privacy](docs/SECURITY_AND_PRIVACY.md).
+
+## Install for development
+
+Requirements: **Node.js 22.12+** and a Chromium-based browser.
 
 ```bash
-npm install
-npm run build          # → dist/
-# Chrome: chrome://extensions → Developer mode → Load unpacked → select dist/
+npm ci
+npm run build
 ```
 
-**Windows users:** See [Windows Setup](docs/INSTALL.md#windows).
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked** and select the repository's `dist/` directory.
+4. Reload existing tabs after installing or updating the extension.
+
+For Windows details and troubleshooting, see [Installation](docs/INSTALL.md).
+
+## Use NightLens
+
+1. Open the toolbar popup to toggle dark mode globally or exclude the current site.
+2. Choose a theme and adjust brightness/contrast. Expand **More** for warmth and shortcut information.
+3. Open **Settings** for custom themes, per-site configuration, accessibility, scheduling, reading mode, performance, import/export, and resets.
+4. On a native-dark site, choose **Force dark mode on this site** only if you want NightLens to restyle it anyway.
+
+Browser-internal pages, the Chrome Web Store, local files, and PDF viewers are unsupported.
+
+## Screenshots
+
+| Popup | Settings |
+|---|---|
+| ![NightLens popup](docs/screenshots/popup.png) | ![NightLens settings](docs/screenshots/options.png) |
+
+Additional fixture screenshots are in [`docs/screenshots/`](docs/screenshots/). These are project fixtures, not a claim of compatibility with every live website.
+
+## Commands
 
 | Command | Purpose |
 |---|---|
-| `npm run build` | Production build to `dist/` |
-| `npm run typecheck` | `tsc --noEmit` strict |
-| `npm test` | 573 unit tests (Vitest + jsdom) |
-| `npm run test:e2e` | 40+ E2E in real Chromium with extension loaded (Playwright) |
-| `npm run verify` | typecheck + test + test:e2e |
+| `npm run typecheck` | Strict TypeScript checking |
+| `npm test` | Vitest unit/integration tests in jsdom |
+| `npm run build` | Production extension in `dist/` |
+| `npx playwright install chromium` | Install the browser used by E2E tests |
+| `npm run test:e2e` | Build and test the real extension in Chromium |
+| `npm run verify` | Type-check, unit tests, and E2E tests |
 
-E2E Chromium from `$NIGHTLENS_CHROMIUM` (default `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`).
+Set `NIGHTLENS_CHROMIUM=/path/to/chrome` to use a particular executable. E2E tests require a Chromium version that supports Manifest V3 extension loading. Actual results and unverified checks are recorded in [Test report](docs/TEST_REPORT.md) and [Limitations](docs/LIMITATIONS.md).
 
----
+## Architecture
 
-## 🎯 Design Philosophy
+```text
+Popup / Options ── writes ──> chrome.storage.local
+                                  │ onChanged
+                                  ▼
+HTTP/HTTPS content script ──> decision + ThemeEngine
+        │                             │
+        │                             ├─ computed-color mapper
+        │                             ├─ generated attribute rules
+        │                             └─ batched mutation/SPA handling
+        ▼
+Validated status messages ──> Popup
 
-**Engine first, then product.** The color engine is the heart — intelligently detecting backgrounds, text, borders, links, buttons, form controls, gradients, shadows; mapping them through theme tokens while preserving hue and enforcing contrast against *effective* backgrounds (alpha-blended ancestors). **No blind inversion**, no destroyed brand identity.
-
-Premium UI inspired by **Linear, Raycast, Arc, Vercel, Notion, Apple** — minimal, elegant, consistent.
-
----
-
-## 📸 Screenshots
-
-| Popup | Settings Dashboard | Theme Selection |
-|---|---|---|
-| ![Popup](docs/screenshots/popup.png) | ![Options](docs/screenshots/options.png) | ![Themes](docs/screenshots/docs-dark.png) |
-
-Additional fixtures: News, Docs, Edu, Shop, Search, WebApp, Modern, CodeHost — see `docs/screenshots/`.
-
----
-
-## 🏗️ Architecture
-
-```
-            chrome.storage.local  ("nightlens:settings")
-                 ▲        │ onChanged
-   writes        │        ▼
- ┌──────────┐    │   ┌──────────────────────────────┐   status push / get-status
- │ Popup /  │────┘   │ Content script (every frame) │──────────────────────────────► Popup
- │ Options  │        │  decide() → ThemeEngine      │◄──── tabs.sendMessage(frameId:0)
- └──────────┘        └──────────────────────────────┘
- ┌──────────────────────┐
- │ Service worker       │  Alt+Shift+D toggles enabled; badge OFF; schedule alarm
- └──────────────────────┘
+MV3 service worker: Alt+Shift+D, install/startup badge, validated messages
 ```
 
-Full details: [Architecture](docs/ARCHITECTURE.md) · [Feature Matrix](docs/FEATURE_TEST_MATRIX.md)
+Source is organized into `src/engine/`, `src/content/`, `src/background/`, `src/shared/`, `src/popup/`, `src/options/`, and `src/ui/`. See [Architecture](docs/ARCHITECTURE.md).
 
----
+## Contributing
 
-## 🔐 Permissions
+Read [CONTRIBUTING.md](CONTRIBUTING.md), use the issue templates, and include test evidence in pull requests. Keep changes focused and preserve the privacy and permission guarantees.
 
-| Permission | Why | Not requested |
-|---|---|---|
-| `storage` | Save settings locally | `tabs`, `history`, `cookies`, `webRequest`, host_permissions |
-| `alarms` | Check schedule every minute | — |
-| `content_scripts` on `http/https` | Theme must run on every site | `file://`, `chrome://`, PDF viewer |
-| `Alt+Shift+D` | Keyboard toggle | — |
+NightLens is available under the [MIT License](LICENSE).
 
-No `web_accessible_resources`, no `externally_connectable`, no remote scripts. Default MV3 CSP kept.
+## Documentation
 
----
-
-## 📚 Documentation
-
-- [Install & Build (Windows included)](docs/INSTALL.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Installation](docs/INSTALL.md)
+- [Browser test checklist](docs/BROWSER_TEST_CHECKLIST.md)
+- [Feature/test matrix](docs/FEATURE_TEST_MATRIX.md)
+- [Test report](docs/TEST_REPORT.md)
+- [Implementation report](docs/IMPLEMENTATION_REPORT.md)
+- [Known limitations](docs/LIMITATIONS.md)
 - [Security & Privacy](docs/SECURITY_AND_PRIVACY.md)
-- [Known Limitations](docs/LIMITATIONS.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Feature ↔ Test Matrix](docs/FEATURE_TEST_MATRIX.md)
-- [Browser Test Checklist](docs/BROWSER_TEST_CHECKLIST.md)
-
----
-
-## 🧪 Testing
-
-- **Unit:** Color parsing (hex/rgb/hsl/oklch/lab/display-p3), WCAG contrast, palette tokens for all themes × slider extremes, hostname rules, sanitization, decide(), engine quiescence, style generation, UI contrast.
-- **Integration:** Popup interactions, persistence, theme switching, exclusions, dynamic DOM.
-- **E2E:** Extension load, enable/disable, theme switching, shortcuts, per-site rules, SPA navigation, modern color syntax, special content (img/canvas/svg), native-dark detection, CSP.
-
-Run: `npm test` · `npm run test:e2e` · `npm run verify`
-
----
-
-## 🗺️ Roadmap
-
-- Hover/active state preservation via pseudo-class remapping
-- Logo inversion heuristics (sampling same-origin pixels)
-- Early-paint cache (per-origin enabled flag)
-- Firefox/Edge builds after MV3 verification
-- Visual regression + axe-core audits
-
-See [Limitations & Future Work](docs/LIMITATIONS.md).
-
----
-
-## 🤝 Contributing
-
-Issues and PRs welcome. Keep the engine reliable, the UI elegant, and the privacy promise.
-
----
-
-*Crafted with care — privacy-first, performance-obsessed, genuinely excellent dark mode.*

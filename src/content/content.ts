@@ -1,8 +1,8 @@
-import { ThemeEngine, type EngineStatus } from '../engine/engine';
+import { ThemeEngine, type EngineConfig, type EngineStatus } from '../engine/engine';
 import { buildTokens } from '../engine/palette';
 import { decide, getEffectiveSettings } from '../shared/decision';
 import { sanitizeCustomCss } from '../shared/css';
-import { normalizeHostname } from '../shared/hostname';
+import { getSiteEntry, normalizeHostname } from '../shared/hostname';
 import { STATUS_CHANGED, isGetStatusMessage, type StatusChangedMessage, type StatusPayload } from '../shared/messages';
 import { loadSettings, subscribeToSettings } from '../shared/storage';
 import { cloneDefaults } from '../shared/defaults';
@@ -17,24 +17,25 @@ export function getSiteHostname(loc: Location = location): string | null {
   return normalizeHostname(loc.hostname);
 }
 
-export function startContentScript(): void {
+export function startContentScript(): () => void {
   const w = window as unknown as { __nightlensLoaded?: boolean };
-  if (w.__nightlensLoaded) return;
+  if (w.__nightlensLoaded) return () => undefined;
   w.__nightlensLoaded = true;
 
   const isTop = window.top === window;
   const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   let settings: Settings = cloneDefaults();
   let loaded = false;
+  let disposed = false;
   let siteStatus: SiteStatus = 'globally-off';
   let siteMode: StatusPayload['siteMode'] = null;
 
   const payload = (): StatusPayload => ({ hostname: getSiteHostname(), status: siteStatus, siteMode });
-
   const setStatus = (status: SiteStatus): void => {
     if (status === siteStatus) return;
     siteStatus = status;
-    if (!isTop) return;
+    if (!isTop || disposed) return;
     const message: StatusChangedMessage = { type: STATUS_CHANGED, ...payload() };
     chrome.runtime.sendMessage(message).catch(() => undefined);
   };
@@ -42,18 +43,15 @@ export function startContentScript(): void {
   const engine = new ThemeEngine(document, window, {
     onStatus: (s: EngineStatus) => setStatus(s === 'active' ? 'active' : 'native-dark'),
     onStats: (stats) => {
-      if (settings.developerMode) {
-        console.debug('[NightLens] Engine stats', stats);
-      }
+      if (settings.developerMode) console.debug('[NightLens] Engine stats', stats);
     },
   });
 
   const apply = (): void => {
-    if (!loaded) return;
+    if (!loaded || disposed) return;
     const hostname = getSiteHostname();
     const effective = getEffectiveSettings(settings, hostname);
     const decision = decide(effective, hostname, darkQuery.matches);
-
     siteMode = decision.siteMode;
 
     if (!decision.active) {
@@ -62,40 +60,28 @@ export function startContentScript(): void {
       return;
     }
 
-    // Determine effective theme (per-site override)
     let tokens: ReturnType<typeof buildTokens>;
     try {
-      const effThemeSettings: any = {
-        theme: effective.theme,
-        brightness: effective.brightness,
-        contrast: effective.contrast,
-        sepia: effective.sepia,
-        warmth: effective.warmth,
-        saturation: effective.saturation,
-        accentHue: effective.accentHue,
-        customThemes: effective.customThemes,
-        activeCustomThemeId: effective.activeCustomThemeId,
-      };
-      tokens = buildTokens(effThemeSettings);
+      tokens = buildTokens(effective);
     } catch {
-      tokens = buildTokens(settings as any);
+      // A corrupt custom theme must not prevent the rest of the page from working.
+      tokens = buildTokens(cloneDefaults());
     }
 
-    const customCSS = hostname ? settings.customCSS[hostname] : undefined;
+    const customCSS = getSiteEntry(settings.customCSS, hostname);
     const sanitizedCSS = customCSS ? sanitizeCustomCss(customCSS) : undefined;
-
-    const config: any = {
+    const config: EngineConfig = {
       tokens,
       skipNativeDarkCheck: decision.forceNative,
       readingMode: effective.readingMode.enabled ? effective.readingMode : undefined,
       customCSS: sanitizedCSS || undefined,
       accessibility: {
         underlineLinks: effective.accessibility.underlineLinks,
-        reducedMotion: effective.accessibility.reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        reducedMotion: effective.accessibility.reducedMotion || motionQuery.matches,
         highContrast: effective.accessibility.highContrast,
       },
       developerMode: effective.developerMode,
-      compatibility: hostname ? effective.compatibility[hostname] ?? 'auto' : 'auto',
+      compatibility: getSiteEntry(effective.compatibility, hostname) ?? 'auto',
       textSize: effective.textSize,
       batchSize: effective.performance.maxElementsPerFrame,
       debounceMs: effective.performance.debounceMs,
@@ -105,38 +91,59 @@ export function startContentScript(): void {
     if (engine.isRunning) engine.update(config); else engine.start(config);
   };
 
-  loadSettings().then((s) => { settings = s; loaded = true; apply(); });
-  subscribeToSettings((s) => { settings = s; apply(); });
-  darkQuery.addEventListener('change', apply);
-
-  // Re-check schedule every minute
-  setInterval(() => {
-    if (settings.schedule.enabled) apply();
-  }, 60_000);
-
-  // Listen for visibility change to re-apply (tab becomes active)
-  document.addEventListener('visibilitychange', () => {
+  const onVisibilityChange = (): void => {
     if (!document.hidden) apply();
-  });
-
-  if (isTop) {
-    chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
-      if (sender.id !== chrome.runtime.id || !isGetStatusMessage(message)) return false;
+  };
+  const onMessage = (message: unknown, sender: chrome.runtime.MessageSender, sendResponse: (response?: unknown) => void): boolean => {
+    if (sender.id !== chrome.runtime.id || typeof message !== 'object' || message === null) return false;
+    if (isGetStatusMessage(message) && isTop) {
       sendResponse(payload());
       return false;
-    });
-    // Also handle requests for debug info
-    chrome.runtime.onMessage.addListener((message: unknown) => {
-      if (typeof message === 'object' && message !== null && (message as any).type === 'nightlens/get-debug') {
-        const debug = {
-          hostname: getSiteHostname(),
-          settings,
-          engineRunning: engine.isRunning,
-          stats: engine.getStats(),
-        };
-        chrome.runtime.sendMessage({ type: 'nightlens/debug-info', ...debug }).catch(() => undefined);
-      }
-      return false;
-    });
+    }
+    if ((message as Record<string, unknown>).type === 'nightlens/get-debug' && isTop) {
+      chrome.runtime.sendMessage({
+        type: 'nightlens/debug-info',
+        hostname: getSiteHostname(),
+        settings,
+        engineRunning: engine.isRunning,
+        stats: engine.getStats(),
+      }).catch(() => undefined);
+    }
+    return false;
+  };
+  const onPageHide = (event: PageTransitionEvent): void => {
+    // Keep the BFCache page intact; a normal unload is the final cleanup point.
+    if (!event.persisted) dispose();
+  };
+  const unsubscribe = subscribeToSettings((s) => { settings = s; apply(); });
+  const scheduleTimer = window.setInterval(() => {
+    if (settings.schedule.enabled && !document.hidden) apply();
+  }, 60_000);
+
+  function dispose(): void {
+    if (disposed) return;
+    disposed = true;
+    unsubscribe();
+    window.clearInterval(scheduleTimer);
+    darkQuery.removeEventListener('change', apply);
+    motionQuery.removeEventListener('change', apply);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('pagehide', onPageHide);
+    chrome.runtime.onMessage.removeListener(onMessage);
+    engine.stop();
+    w.__nightlensLoaded = false;
   }
+
+  void loadSettings().then((s) => {
+    if (disposed) return;
+    settings = s;
+    loaded = true;
+    apply();
+  });
+  darkQuery.addEventListener('change', apply);
+  motionQuery.addEventListener('change', apply);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('pagehide', onPageHide);
+  chrome.runtime.onMessage.addListener(onMessage);
+  return dispose;
 }

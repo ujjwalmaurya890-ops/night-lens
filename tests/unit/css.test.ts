@@ -23,6 +23,12 @@ describe('sanitizeCustomCss (privacy: no external network requests via injected 
     expect(sanitizeCustomCss('@font-face { src: url(https://x.test/f.woff2) }')).toBe('');
     expect(sanitizeCustomCss('a { behavior: url(x.htc) }')).toBe('');
   });
+  it('rejects comment/escape obfuscation and non-image data URLs', () => {
+    expect(sanitizeCustomCss('a{background:u\\72l(https://x.test)}')).toBe('');
+    expect(sanitizeCustomCss('a{background:url(/*x*/https://x.test)}')).toBe('');
+    expect(sanitizeCustomCss('a{background:url(data:text/html;base64,AAAA)}')).toBe('');
+    expect(sanitizeCustomCss('@\\69mport "https://x.test/x.css";')).toBe('');
+  });
   it('rejects empty and oversized input', () => {
     expect(sanitizeCustomCss('')).toBe('');
     expect(sanitizeCustomCss('   ')).toBe('');

@@ -2,6 +2,7 @@
   "name": "nightlens",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "NightLens - intelligent dark mode for the web (Chrome, Manifest V3)",
   "scripts": {

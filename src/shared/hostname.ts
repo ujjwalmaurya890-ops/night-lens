@@ -5,9 +5,10 @@ const HOST_RE = new RegExp(`^${LABEL}(?:\\.${LABEL})*$`);
 const IPV6_RE = /^\[[0-9a-f:.]+\]$/;
 
 /**
- * Matching rules (documented in docs/): hostnames are compared EXACTLY after
- * lower-casing and removing one trailing dot. Ports, schemes and paths are ignored.
- * "www.example.com" and "example.com" are different sites; subdomains are never inherited.
+ * Hostnames are normalized by lower-casing and removing one trailing dot. Ports,
+ * schemes and paths are ignored. A rule for example.com also covers its subdomains;
+ * the nearest (most specific) rule wins. IP addresses and single-label hosts match
+ * exactly, so unrelated suffixes such as notexample.com never inherit a rule.
  */
 export function normalizeHostname(input: unknown): string | null {
   if (typeof input !== 'string') return null;
@@ -29,7 +30,34 @@ export function hostnameFromUserInput(input: string): string | null {
   }
 }
 
+/** Returns the closest matching entry, walking from the exact host to parent domains. */
+export function getSiteEntry<T>(entries: Record<string, T>, hostname: string | null): T | undefined {
+  const host = normalizeHostname(hostname);
+  if (!host || !host.includes('.') || host.startsWith('[') || /^\d+(?:\.\d+){3}$/.test(host)) {
+    return host && Object.prototype.hasOwnProperty.call(entries, host) ? entries[host] : undefined;
+  }
+  const labels = host.split('.');
+  for (let i = 0; i < labels.length - 1; i++) {
+    const candidate = labels.slice(i).join('.');
+    if (Object.prototype.hasOwnProperty.call(entries, candidate)) return entries[candidate];
+  }
+  return undefined;
+}
+
+/** Returns the matching rule's hostname, useful for explaining inherited settings. */
+export function getSiteEntryHost<T>(entries: Record<string, T>, hostname: string | null): string | null {
+  const host = normalizeHostname(hostname);
+  if (!host) return null;
+  if (Object.prototype.hasOwnProperty.call(entries, host)) return host;
+  if (!host.includes('.') || host.startsWith('[') || /^\d+(?:\.\d+){3}$/.test(host)) return null;
+  const labels = host.split('.');
+  for (let i = 1; i < labels.length - 1; i++) {
+    const candidate = labels.slice(i).join('.');
+    if (Object.prototype.hasOwnProperty.call(entries, candidate)) return candidate;
+  }
+  return null;
+}
+
 export function getSiteMode(rules: SiteRules, hostname: string | null): SiteMode | undefined {
-  if (!hostname) return undefined;
-  return Object.prototype.hasOwnProperty.call(rules, hostname) ? rules[hostname] : undefined;
+  return getSiteEntry(rules, hostname);
 }
