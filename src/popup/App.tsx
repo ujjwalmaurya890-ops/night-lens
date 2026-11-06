@@ -417,6 +417,9 @@ export function App() {
                   </span>
                   <kbd className="kbd">Alt+Shift+D</kbd>
                 </div>
+                <p className="field-hint">
+                  Change it at chrome://extensions/shortcuts. The shortcut toggles the global switch.
+                </p>
               </div>
 
               <div className="field">

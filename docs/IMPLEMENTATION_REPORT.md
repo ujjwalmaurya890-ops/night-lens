@@ -1,0 +1,29 @@
+# Ten-contribution implementation report
+
+**Date:** 2026-11-06
+**Scope:** Preserve and harden the existing NightLens Manifest V3 / TypeScript / React / Vite architecture. No commits or pushes were created.
+
+| # | Contribution and implementation | Principal files | Verification | Known limits / remaining work |
+|---:|---|---|---|---|
+| 1 | **Intelligent dark engine.** Retained computed-color/hue/contrast mapping; implemented literal gradient-stop and box-shadow remapping with geometry preservation, generated-declaration validation, and safe non-gradient image locking. Removed redundant color reads. | `src/engine/engine.ts`, `mapper.ts`, `styles.ts`; engine/theme tests | Gradient/shadow unit regression, 606 total tests, type-check, build. | Contrast is not measured at every gradient pixel; arbitrary images/unknown color syntax remain outside the guarantee. Real-browser gradient test added but not run here. |
+| 2 | **Per-website controls.** Added nearest-parent subdomain inheritance with exact-host priority, safe IP/single-label behavior, consistent inherited themes/overrides/CSS/profiles, and confirmed website-only reset. | `shared/hostname.ts`, `decision.ts`; Websites/Overview tabs; shared/popup tests | Specificity, lookalike/IP tests, inherited effective settings, reset integration test. | No public-suffix wildcard model or exact-only opt-out. Cross-context storage remains last-write-wins. |
+| 3 | **Custom themes.** Preserved all palettes/custom theme workflows; made Midnight the fresh-install default, kept stored legacy choices, fixed per-site assignments in effective settings, and applied warmth to custom themes. | `shared/defaults.ts`, `decision.ts`, `engine/palette.ts`; theme/shared tests | 417 theme tests including all preset/slider extremes and custom warmth. | Existing stored Balanced remains Balanced; system palette intentionally uses legacy Balanced tokens. |
+| 4 | **Brightness/contrast/warmth.** Kept live storage-driven updates and clamped controls; fixed warmth/sepia effective values and serialized rapid same-surface writes so independent changes are not lost. | `shared/storage.ts`, `decision.ts`, `engine/palette.ts`, existing UI controls | Concurrent-write and custom-theme tests; popup slider integration tests. | Only webpage rendering is adjusted. Simultaneous writes from separate extension contexts are not transactional. |
+| 5 | **Smart media protection.** Normal themes no longer filter photos/videos; replaced media remains untouched; SVG/canvas behavior preserved; Media-only now exclusively owns explicit media dimming and skips all recoloring. | `engine/styles.ts`, `engine.ts`; theme/engine/E2E tests | Media preservation unit tests and updated real-browser fixture (E2E pending). | Transparent dark logos may need site-specific CSS. Media-only intentionally dims media. |
+| 6 | **Dynamic compatibility.** Kept batched MutationObserver/SPA/open-shadow support; removed double subtree traversal, capped class-change work in one pass, pruned detached shadow contexts, cancelled queued RAFs, and added full content unload cleanup. | `engine/engine.ts`, `content/content.ts`; engine/content tests | Dynamic DOM, quiescence, batching/cache/debounce, pagehide cleanup tests. | Closed roots and some third-party widgets remain unsupported. Real SPA/browser regression run pending. |
+| 7 | **Keyboard quick toggle.** Retained MV3 `toggle-nightlens` (`Alt+Shift+D`), added configuration guidance and background rejection handling; removed unrelated periodic alarms. | `manifest.json`, `background/index.ts`, `popup/App.tsx`; background tests | Command handler/badge tests and manifest inspection. | Physical key press and user rebinding were not browser-tested here. |
+| 8 | **Modern popup/settings.** Preserved the polished dark UI; improved site-rule explanations, website reset flow, shortcut help, and accurate privacy/media copy without adding decorative controls. | Popup, Websites/Overview/System tabs, shared components/styles (existing) | 21 React UI tests including names, focusability, status, forms, reset, storage failures. | Visual responsive review and screen-reader testing still required in a browser. |
+| 9 | **Accessibility/performance.** Retained contrast/focus/reduced-motion support; reduced DOM work and background processing, cleaned lifecycle resources, removed `alarms`, hardened CSS validation/import handling, and documented contrast scope. | Engine/content/storage/CSS/background/manifest; UI-contrast/CSS/shared tests | 40 UI-contrast tests, 606 total, type-check, `npm audit` 0, source scan, manifest review. | No formal WCAG/screen-reader certification, hardware performance profile, or universal contrast claim. |
+| 10 | **Testing/docs/open-source readiness.** Added lifecycle and regression tests, portable E2E setup and gradient fixture; rewrote accurate README/architecture/security/limitations/test docs; added MIT license, contributing guide, issue/PR templates, and CI. | `tests/`, `docs/`, `README.md`, `CONTRIBUTING.md`, `LICENSE`, `.github/`, `package.json` | 606/606 unit tests, build/type-check/audit pass. CI E2E configured. | Chromium download blocked in this sandbox; E2E and CI have not produced a result for this revision. No screenshots were fabricated. |
+
+## Final verification summary
+
+- **Pass:** strict TypeScript.
+- **Pass:** 606 tests in 9 Vitest/jsdom files.
+- **Pass:** production build to `dist/`.
+- **Pass:** point-in-time `npm audit` with 0 vulnerabilities.
+- **Pass:** only `storage` in extension permissions; no source network/eval/DOM-injection patterns found by the documented scan.
+- **Blocked:** real-Chromium Playwright execution because no browser was installed and the sandbox could not download one.
+- **Not claimed:** live-site universality, screen-reader validation, physical shortcut testing, battery savings, or formal WCAG conformance.
+
+See [Test report](TEST_REPORT.md) and [Known limitations](LIMITATIONS.md) for details.

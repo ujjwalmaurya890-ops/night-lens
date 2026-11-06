@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LIMITS, STORAGE_KEY, cloneDefaults } from '../../src/shared/defaults';
-import { decide, isWithinSchedule } from '../../src/shared/decision';
-import { getSiteMode, hostnameFromUserInput, normalizeHostname } from '../../src/shared/hostname';
+import { decide, getEffectiveSettings, isWithinSchedule } from '../../src/shared/decision';
+import { getSiteEntryHost, getSiteMode, hostnameFromUserInput, normalizeHostname } from '../../src/shared/hostname';
 import { isGetStatusMessage, isStatusChangedMessage, isStatusPayload } from '../../src/shared/messages';
-import { loadSettings, resetSettings, sanitizeSettings, subscribeToSettings, updateSettings } from '../../src/shared/storage';
+import { loadSettings, resetSettings, sanitizeSettings, subscribeToSettings, updateSettings, validateImport } from '../../src/shared/storage';
 import { installChromeMock } from './chromeMock';
 
-describe('hostname matching (documented: exact hostname, no subdomain inheritance)', () => {
+describe('hostname matching (nearest parent domain wins)', () => {
   it.each([
     ['Example.COM', 'example.com'], ['example.com.', 'example.com'], ['  a.b-c.org ', 'a.b-c.org'], ['localhost', 'localhost'], ['127.0.0.1', '127.0.0.1'], ['[::1]', '[::1]'],
   ])('normalizes %j', (i, o) => expect(normalizeHostname(i)).toBe(o));
@@ -17,13 +17,21 @@ describe('hostname matching (documented: exact hostname, no subdomain inheritanc
     expect(hostnameFromUserInput('not a host')).toBeNull();
     expect(hostnameFromUserInput('')).toBeNull();
   });
-  it('matches exactly and never inherits from parent domains or Object.prototype', () => {
-    const rules = { 'example.com': 'off' as const };
+  it('inherits parent rules, prefers the closest host, and never matches suffix lookalikes or Object.prototype', () => {
+    const rules = { 'example.com': 'off' as const, 'docs.example.com': 'on' as const };
     expect(getSiteMode(rules, 'example.com')).toBe('off');
-    expect(getSiteMode(rules, 'www.example.com')).toBeUndefined();
-    expect(getSiteMode(rules, 'sub.example.com')).toBeUndefined();
+    expect(getSiteMode(rules, 'www.example.com')).toBe('off');
+    expect(getSiteMode(rules, 'sub.example.com')).toBe('off');
+    expect(getSiteMode(rules, 'docs.example.com')).toBe('on');
+    expect(getSiteMode(rules, 'v1.docs.example.com')).toBe('on');
+    expect(getSiteMode(rules, 'notexample.com')).toBeUndefined();
     expect(getSiteMode(rules, 'constructor')).toBeUndefined();
     expect(getSiteMode(rules, null)).toBeUndefined();
+    expect(getSiteEntryHost(rules, 'v1.docs.example.com')).toBe('docs.example.com');
+  });
+  it('does not inherit IP-address or single-label hostname rules', () => {
+    expect(getSiteMode({ '127.0.0.1': 'off' }, '1127.0.0.1')).toBeUndefined();
+    expect(getSiteMode({ localhost: 'off' }, 'sub.localhost')).toBeUndefined();
   });
 });
 
@@ -58,6 +66,15 @@ describe('storage persistence', () => {
     expect(mock.data[STORAGE_KEY]).toMatchObject({ theme: 'dim', brightness: LIMITS.brightness.max, siteRules: { 'a.com': 'off' } });
     expect((await loadSettings()).theme).toBe('dim');
   });
+  it('serializes rapid updates so independent fields are not lost', async () => {
+    installChromeMock();
+    await Promise.all([
+      updateSettings((s) => ({ ...s, brightness: 80 })),
+      updateSettings((s) => ({ ...s, contrast: 120 })),
+      updateSettings((s) => ({ ...s, theme: 'nord' })),
+    ]);
+    expect(await loadSettings()).toMatchObject({ brightness: 80, contrast: 120, theme: 'nord' });
+  });
   it('surfaces write failures instead of pretending success', async () => {
     const mock = installChromeMock();
     mock.failStorage.set = true;
@@ -85,6 +102,28 @@ describe('storage persistence', () => {
   });
 });
 
+describe('settings import', () => {
+  it('accepts objects and sanitizes their values', () => {
+    const result = validateImport('{"theme":"nord","brightness":80}');
+    expect(result).toMatchObject({ ok: true, settings: { theme: 'nord', brightness: 80 } });
+  });
+  it.each(['null', '[]', '"settings"', 'not-json'])('rejects invalid backup %s', (json) => {
+    expect(validateImport(json).ok).toBe(false);
+  });
+});
+
+describe('effective per-site settings', () => {
+  it('applies inherited theme assignments and gives exact overrides priority', () => {
+    const settings = {
+      ...cloneDefaults(),
+      siteThemes: { 'example.com': 'nord' as const },
+      siteOverrides: { 'docs.example.com': { theme: 'amoled' as const, brightness: 85, warmth: 20 } },
+    };
+    expect(getEffectiveSettings(settings, 'www.example.com')).toMatchObject({ theme: 'nord' });
+    expect(getEffectiveSettings(settings, 'v1.docs.example.com')).toMatchObject({ theme: 'amoled', brightness: 85, warmth: 20, sepia: 20 });
+  });
+});
+
 describe('decide()', () => {
   const base = cloneDefaults();
   it('is off globally', () => expect(decide({ ...base, enabled: false }, 'a.com', true)).toMatchObject({ active: false, status: 'globally-off' }));
@@ -95,6 +134,7 @@ describe('decide()', () => {
     const s = { ...base, theme: 'system' as const };
     expect(decide(s, 'a.com', false)).toMatchObject({ active: false, status: 'waiting-for-system' });
     expect(decide(s, 'a.com', true)).toMatchObject({ active: true });
+    expect(decide({ ...s, siteRules: { 'a.com': 'on' } }, 'a.com', false)).toMatchObject({ active: true, forceNative: true });
   });
   it('global off beats a forced-on site rule', () => expect(decide({ ...base, enabled: false, siteRules: { 'a.com': 'on' } }, 'a.com', true).active).toBe(false));
   it('reports scheduled-off when outside the schedule window (content script passes this through to the popup)', () => {

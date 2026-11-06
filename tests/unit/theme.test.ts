@@ -35,15 +35,23 @@ describe('palette tokens meet their contrast targets for every theme and slider 
     expect(buildTokens({ ...cloneDefaults(), theme: 'highContrast' }).minTextContrast).toBe(7);
     expect(buildTokens({ ...cloneDefaults(), theme: 'system' }).preset).toBe('balanced');
   });
+  it('applies warmth to custom themes as well as presets', () => {
+    const customThemes = [{ id: 'mine', name: 'Mine', bg: '#182030', bgRaised: '#202a3a', text: '#eef2ff', textMuted: '#b8c0d0', accent: '#7ab7ff', link: '#7ab7ff', border: '#3a4555', createdAt: 1 }];
+    const base = { ...cloneDefaults(), theme: 'custom' as const, customThemes, activeCustomThemeId: 'mine' };
+    const cool = buildTokens(base).colors.bg;
+    const warm = buildTokens({ ...base, warmth: 60 }).colors.bg;
+    expect(warm.r - warm.b).toBeGreaterThan(cool.r - cool.b);
+  });
   it('sepia shifts the palette warmer', () => {
     const cool = buildTokens(cloneDefaults()).colors.bg;
     const warm = buildTokens({ ...cloneDefaults(), sepia: 60 }).colors.bg;
     expect(warm.r - warm.b).toBeGreaterThan(cool.r - cool.b); // more red than blue = warmer
     expect(rgbToHsl(warm).h).toBeLessThan(80); // lands on the orange/yellow side, not magenta/green
   });
-  it('dim theme dims media; balanced does not', () => {
-    expect(buildBaseCss(buildTokens({ ...cloneDefaults(), theme: 'dim' }))).toContain('brightness(0.88)');
+  it('preserves media in every theme and only dims it for the explicit media-only profile', () => {
+    expect(buildBaseCss(buildTokens({ ...cloneDefaults(), theme: 'dim' }))).not.toContain('brightness(');
     expect(buildBaseCss(buildTokens(cloneDefaults()))).not.toContain('brightness(');
+    expect(buildBaseCss(buildTokens(cloneDefaults()), { mediaOnly: true })).toContain('brightness(0.88)');
   });
 });
 

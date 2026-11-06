@@ -25,26 +25,10 @@ export async function handleInstalled(): Promise<void> {
   const stored = await chrome.storage.local.get(STORAGE_KEY);
   const settings = stored[STORAGE_KEY] === undefined ? await resetSettings() : await loadSettings();
   await updateBadge(settings);
-  // Set up alarm for schedule checking
-  try {
-    await chrome.alarms.create('nightlens-schedule', { periodInMinutes: 1 });
-  } catch { /* alarms may not be available in test */ }
 }
 
 export async function handleStartup(): Promise<void> {
   await updateBadge(await loadSettings());
-  try {
-    await chrome.alarms.create('nightlens-schedule', { periodInMinutes: 1 });
-  } catch { /* ignore */ }
-}
-
-export async function handleAlarm(alarm: chrome.alarms.Alarm): Promise<void> {
-  if (alarm.name !== 'nightlens-schedule') return;
-  // Badge update based on schedule – if scheduled off, show indicator
-  const settings = await loadSettings();
-  if (settings.schedule.enabled) {
-    await updateBadge(settings);
-  }
 }
 
 export async function handleMessage(message: unknown, _sender: chrome.runtime.MessageSender): Promise<unknown> {

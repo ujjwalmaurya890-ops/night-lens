@@ -88,7 +88,7 @@ describe('popup', () => {
     expect(stored().theme).toBe('dim');
     fireEvent.click(screen.getByRole('button', { name: 'Reset…' }));
     fireEvent.click(within(screen.getByRole('group', { name: 'Confirm reset' })).getByRole('button', { name: 'Reset' }));
-    await waitFor(() => expect(stored()).toMatchObject({ theme: 'balanced', enabled: true, siteRules: {} }));
+    await waitFor(() => expect(stored()).toMatchObject({ theme: 'midnight', enabled: true, siteRules: {} }));
     expect(await screen.findByText(/reset to their defaults/)).toBeTruthy();
   });
 
@@ -157,9 +157,9 @@ describe('options page', () => {
     expect(screen.getByText(/does not read or record your browsing history/)).toBeTruthy();
   });
 
-  it('documents exact-hostname matching on the page', async () => {
+  it('documents nearest-host subdomain matching on the page', async () => {
     render(<Options />);
-    expect((await screen.findAllByText(/exact hostname/)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/subdomains/)).length).toBeGreaterThan(0);
   });
 
   it('websites tab: applies a force-on rule, assigns a per-site theme, saves a compatibility profile', async () => {
@@ -183,6 +183,24 @@ describe('options page', () => {
     fireEvent.change(screen.getByLabelText('Profile'), { target: { value: 'gentle' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
     await waitFor(() => expect(stored().compatibility).toEqual({ 'tricky.example.com': 'gentle' }));
+  });
+
+  it('resets all website preferences only after confirmation while keeping global appearance', async () => {
+    const { updateSettings } = await import('../../src/shared/storage');
+    await updateSettings((s) => ({
+      ...s,
+      theme: 'nord',
+      siteRules: { 'example.com': 'off' },
+      siteThemes: { 'example.com': 'nord' },
+      siteOverrides: { 'example.com': { brightness: 80 } },
+      compatibility: { 'example.com': 'gentle' },
+      customCSS: { 'example.com': 'body{color:#fff}' },
+    }));
+    render(<Options />);
+    fireEvent.click(await screen.findByRole('button', { name: /Websites/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset website preferences…' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Confirm website preference reset' })).getByRole('button', { name: 'Reset websites' }));
+    await waitFor(() => expect(stored()).toMatchObject({ theme: 'nord', siteRules: {}, siteThemes: {}, siteOverrides: {}, compatibility: {}, customCSS: {} }));
   });
 
   it('websites tab: rejects an invalid hostname in the rule form and stores nothing', async () => {

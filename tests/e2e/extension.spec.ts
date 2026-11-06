@@ -46,6 +46,20 @@ test('regression: the engine records <html>\'s ORIGINAL background (not its own 
   expect(await page.evaluate(() => document.documentElement.hasAttribute('data-nl-ready'))).toBe(true);
 });
 
+test('gradients and shadows are remapped while media remains unfiltered', async ({ context, setSettings }) => {
+  await setSettings(settings());
+  const page = await context.newPage();
+  await open(page, 'gradient.html');
+  const result = await page.evaluate(() => {
+    const hero = getComputedStyle(document.getElementById('hero')!);
+    return { gradient: hero.backgroundImage, shadow: hero.boxShadow, media: getComputedStyle(document.getElementById('photo')!).filter };
+  });
+  expect(result.gradient).toContain('linear-gradient(45deg');
+  expect(result.gradient).not.toContain('255, 255, 255');
+  expect(result.shadow).toContain('0px 4px 8px');
+  expect(result.media).toBe('none');
+});
+
 test.describe('theme modes and settings', () => {
   for (const theme of ['highContrast', 'dim']) {
     test(`${theme}: docs page meets its contrast floor`, async ({ context, setSettings }) => {
@@ -92,10 +106,10 @@ test.describe('theme modes and settings', () => {
     const page = await context.newPage();
     await open(page, 'news.html');
     const filter = () => page.evaluate(() => getComputedStyle(document.getElementById('photo')!).filter);
-    expect(await filter()).toContain('brightness(0.88)');
+    expect(await filter()).toBe('none');
     await page.reload();
     await waitThemed(page);
-    expect(await filter()).toContain('brightness(0.88)');
+    expect(await filter()).toBe('none');
   });
 
   test('follow-system mode tracks prefers-color-scheme', async ({ context, setSettings }) => {
@@ -112,7 +126,7 @@ test.describe('theme modes and settings', () => {
   });
 });
 
-test.describe('per-site rules (exact hostname matching)', () => {
+test.describe('per-site rules (nearest hostname matching)', () => {
   test('excluding 127.0.0.1 leaves it untouched but still themes localhost', async ({ context, setSettings }) => {
     await setSettings(settings({ siteRules: { '127.0.0.1': 'off' } }));
     const excluded = await context.newPage();
@@ -345,7 +359,7 @@ test.describe('popup (real extension page)', () => {
     await popup.getByRole('button', { name: 'Reset…' }).click();
     await popup.getByRole('group', { name: 'Confirm reset' }).getByRole('button', { name: 'Reset' }).click();
     await waitThemed(page);
-    await expect(popup.getByLabel('Theme')).toHaveValue('balanced');
+    await expect(popup.getByLabel('Theme')).toHaveValue('midnight');
   });
 
   test('keyboard: Tab reaches every control in a sensible order and Space toggles a switch', async ({ context, sw, extensionId, setSettings }) => {

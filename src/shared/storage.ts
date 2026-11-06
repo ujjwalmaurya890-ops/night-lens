@@ -221,17 +221,30 @@ export async function loadSettings(): Promise<Settings> {
   }
 }
 
-/** Read-modify-write. Rejects if storage fails so the UI can show a real error. */
-export async function updateSettings(updater: (current: Settings) => Settings): Promise<Settings> {
-  const next = sanitizeSettings(updater(await loadSettings()));
-  await chrome.storage.local.set({ [STORAGE_KEY]: next });
-  return next;
+// Serialize writes made by one extension surface. Without this queue, two rapid
+// slider/theme changes can both read the same old value and lose the first update.
+let writeQueue: Promise<void> = Promise.resolve();
+function enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const result = writeQueue.then(operation);
+  writeQueue = result.then(() => undefined, () => undefined);
+  return result;
 }
 
-export async function resetSettings(): Promise<Settings> {
-  const next = cloneDefaults();
-  await chrome.storage.local.set({ [STORAGE_KEY]: next });
-  return next;
+/** Read-modify-write. Rejects if storage fails so the UI can show a real error. */
+export function updateSettings(updater: (current: Settings) => Settings): Promise<Settings> {
+  return enqueueWrite(async () => {
+    const next = sanitizeSettings(updater(await loadSettings()));
+    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    return next;
+  });
+}
+
+export function resetSettings(): Promise<Settings> {
+  return enqueueWrite(async () => {
+    const next = cloneDefaults();
+    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    return next;
+  });
 }
 
 export function subscribeToSettings(callback: (settings: Settings) => void): () => void {
@@ -251,13 +264,12 @@ export function exportSettings(settings: Settings): string {
 
 export function validateImport(json: string): { ok: true; settings: Settings } | { ok: false; error: string } {
   try {
-    const parsed = JSON.parse(json);
-    const sanitized = sanitizeSettings(parsed);
-    // Check that parsing produced something plausible (at least theme valid if present)
-    if (parsed && typeof parsed === 'object' && 'theme' in parsed && !(THEME_IDS as readonly unknown[]).includes((parsed as Record<string, unknown>).theme) && !(parsed as Record<string, unknown>).theme === undefined) {
-      // But we already sanitize, so we allow fallback to default – just warn
+    if (json.length > 1_000_000) return { ok: false, error: 'Settings file is too large (1 MB maximum).' };
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return { ok: false, error: 'Settings must be a JSON object.' };
     }
-    return { ok: true, settings: sanitized };
+    return { ok: true, settings: sanitizeSettings(parsed) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

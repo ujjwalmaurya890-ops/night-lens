@@ -1,6 +1,6 @@
 import { WHITE, blend, colorKey, contrastRatio, ensureContrast, parseColor, relativeLuminance, TRANSPARENT, type RGB, type RGBA } from './color';
 import { detectNativeDark } from './detect';
-import { isColoredLink, mapBackground, mapBorder, mapForeground, mapLinkColor } from './mapper';
+import { isColoredLink, mapBackground, mapBorder, mapBoxShadow, mapForeground, mapGradient, mapLinkColor } from './mapper';
 import type { ThemeTokens } from './palette';
 import { buildBaseCss } from './styles';
 
@@ -19,6 +19,9 @@ const RULE_FOR = {
   'data-nl-fill': (k: string) => `[data-nl-fill="${k}"]{fill:#${k} !important}`,
   'data-nl-stroke': (k: string) => `[data-nl-stroke="${k}"]{stroke:#${k} !important}`,
   'data-nl-plate': (k: string) => `[data-nl-plate="${k}"]{background-color:#${k} !important}`,
+  // Gradient/shadow declarations are emitted by setCssValue after validation.
+  'data-nl-gradient': () => '',
+  'data-nl-shadow': () => '',
 } as const;
 type ColorAttr = keyof typeof RULE_FOR;
 const MANAGED_ATTRS = [...(Object.keys(RULE_FOR) as ColorAttr[]), 'data-nl-link'] as const;
@@ -83,6 +86,8 @@ interface Read {
   bg: RGBA | null;
   fg: RGBA | null;
   hasBgImage: boolean;
+  gradient: string | null;
+  boxShadow: string | null;
   borders: Array<{ attr: ColorAttr; color: RGBA }>;
   disabled: boolean;
   coloredLink: boolean;
@@ -110,6 +115,8 @@ export class ThemeEngine {
   private bgInfo = new WeakMap<Element, BgInfo>();
   private ownBg = new WeakSet<Element>();
   private scheduled = false;
+  private frame: number | null = null;
+  private cssValues = new Map<string, string>();
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private treeObserver: MutationObserver | null = null;
   private rootObserver: MutationObserver | null = null;
@@ -166,6 +173,7 @@ export class ThemeEngine {
         underlineLinks: config.accessibility?.underlineLinks,
         reduceMotion: config.accessibility?.reducedMotion,
         highContrast: config.accessibility?.highContrast,
+        mediaOnly: config.compatibility === 'mediaOnly',
       });
       if (ctx.rules.size > MAX_RULES) { ctx.rules.clear(); ctx.dirty = true; }
     }
@@ -185,6 +193,10 @@ export class ThemeEngine {
     this.win.removeEventListener('popstate', this.onNavigation);
     this.win.removeEventListener('hashchange', this.onNavigation);
     this.unpatchHistory();
+    if (this.frame !== null && typeof this.win.cancelAnimationFrame === 'function') this.win.cancelAnimationFrame(this.frame);
+    this.frame = null;
+    this.scheduled = false;
+    this.cssValues.clear();
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
     this.reevalTimer = this.rescanTimer = this.navigationTimer = null;
@@ -317,6 +329,7 @@ export class ThemeEngine {
       underlineLinks: this.config.accessibility?.underlineLinks,
       reduceMotion: this.config.accessibility?.reducedMotion,
       highContrast: this.config.accessibility?.highContrast,
+      mediaOnly: this.config.compatibility === 'mediaOnly',
     });
     // Text size scaling via CSS variable
     if (this.config.textSize && this.config.textSize !== 100) {
@@ -363,8 +376,33 @@ export class ThemeEngine {
   private addRule(el: Element, attr: ColorAttr, key: string): void {
     const ctx = this.contextFor(el);
     if (!ctx) return;
-    const rule = RULE_FOR[attr](key);
+    let rule = RULE_FOR[attr](key);
+    if (attr === 'data-nl-gradient' || attr === 'data-nl-shadow') {
+      const property = attr === 'data-nl-gradient' ? 'background-image' : 'box-shadow';
+      const value = this.cssValues.get(key);
+      if (!value) return;
+      rule = `[${attr}="${key}"]{${property}:${value} !important}`;
+    }
     if (!ctx.rules.has(rule)) { ctx.rules.add(rule); ctx.dirty = true; this.stats.rules++; }
+  }
+
+  private setCssValue(el: Element, attr: 'data-nl-gradient' | 'data-nl-shadow', value: string): boolean {
+    // Two independent 32-bit hashes keep attribute names small and collisions
+    // practically impossible; values originate from computed CSS and are checked
+    // by the browser before they can become generated declarations.
+    let h1 = 0x811c9dc5;
+    let h2 = 0x9e3779b9;
+    for (let i = 0; i < value.length; i++) {
+      h1 = Math.imul(h1 ^ value.charCodeAt(i), 0x01000193);
+      h2 = Math.imul(h2 ^ value.charCodeAt(i), 0x85ebca6b);
+    }
+    const key = `${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
+    const property = attr === 'data-nl-gradient' ? 'background-image' : 'box-shadow';
+    if (typeof CSS !== 'undefined' && !CSS.supports(property, value)) return false;
+    this.cssValues.set(key, value);
+    el.setAttribute(attr, key);
+    this.addRule(el, attr, key);
+    return true;
   }
   private flushRules(): void {
     for (const ctx of this.contexts.values()) {
@@ -379,22 +417,22 @@ export class ThemeEngine {
 
   // ---- traversal & queue ---
 
-  private collect(start: Node, out: Element[]): void {
+  private collect(start: Node, out: Element[], limit = Number.POSITIVE_INFINITY): void {
     const stack: Element[] = [];
     const pushChildren = (p: ParentNode) => { for (let c = p.lastElementChild; c; c = c.previousElementSibling) stack.push(c); };
     if (start.nodeType === 1) stack.push(start as Element); else pushChildren(start as ParentNode);
-    while (stack.length) {
+    while (stack.length && out.length < limit) {
       const el = stack.pop()!;
       if (SKIP_TAGS.has(el.tagName) || el.hasAttribute(OWNED)) continue;
       out.push(el);
       if (el.namespaceURI === SVG_NS) continue;
-      if (el.shadowRoot) { this.attachRoot(el.shadowRoot); this.collect(el.shadowRoot, out); }
+      if (el.shadowRoot) { this.attachRoot(el.shadowRoot); this.collect(el.shadowRoot, out, limit); }
       pushChildren(el);
     }
   }
-  private enqueueSubtree(root: Node): void {
+  private enqueueSubtree(root: Node, limit?: number): void {
     const found: Element[] = [];
-    this.collect(root, found);
+    this.collect(root, found, limit);
     for (const el of found) this.queue.add(el);
     this.schedule();
   }
@@ -415,8 +453,17 @@ export class ThemeEngine {
       if (el === this.doc.documentElement || el === this.doc.body) continue;
       if (rec.attributeName === 'style' && !STYLE_ATTR_RELEVANT.test(el.getAttribute('style') ?? '')) continue;
       this.queue.add(el);
-      if (rec.attributeName === 'class' && el.childElementCount > 0 && el.querySelectorAll('*').length <= SUBTREE_REPROCESS_LIMIT) {
-        this.enqueueSubtree(el);
+      if (rec.attributeName === 'class' && el.childElementCount > 0) {
+        // Traverse once with a hard cap instead of counting the entire subtree
+        // with querySelectorAll and then traversing it a second time.
+        this.enqueueSubtree(el, SUBTREE_REPROCESS_LIMIT);
+      }
+    }
+    // Do not retain style contexts for shadow hosts removed by an SPA.
+    for (const [root, ctx] of this.contexts) {
+      if (root !== this.doc && !(root as ShadowRoot).host.isConnected) {
+        this.detachContext(ctx);
+        this.contexts.delete(root);
       }
     }
     this.schedule();
@@ -425,8 +472,8 @@ export class ThemeEngine {
   private schedule(): void {
     if (this.scheduled || !this.running || this.queue.size === 0) return;
     this.scheduled = true;
-    const run = () => { this.scheduled = false; this.flush(); };
-    if (typeof this.win.requestAnimationFrame === 'function') this.win.requestAnimationFrame(run); else this.after(16, run);
+    const run = () => { this.frame = null; this.scheduled = false; this.flush(); };
+    if (typeof this.win.requestAnimationFrame === 'function') this.frame = this.win.requestAnimationFrame(run); else this.after(16, run);
   }
 
   // ---- processing ---
@@ -479,7 +526,7 @@ export class ThemeEngine {
     let width = rect.width, height = rect.height;
     if (!width || !height) { width = parseFloat(el.getAttribute('width') ?? ''); height = parseFloat(el.getAttribute('height') ?? ''); }
     const r: Read = {
-      el, kind, bg: null, fg: null, hasBgImage: false, borders: [], disabled: false, coloredLink: false,
+      el, kind, bg: null, fg: null, hasBgImage: false, gradient: null, boxShadow: null, borders: [], disabled: false, coloredLink: false,
       control: CONTROL_TAGS.has(el.localName), isCode: CODE_TAGS.has(el.tagName), isTable: TABLE_TAGS.has(el.tagName),
       isModal: false,
       width, height, hasText: false, shapes: [],
@@ -503,12 +550,9 @@ export class ThemeEngine {
     }
     r.bg = this.color(cs.backgroundColor);
     r.hasBgImage = cs.backgroundImage !== '' && cs.backgroundImage !== 'none';
-    r.fg = cs.color === '' ? null : parseColor(cs.color);
-    // Handle box-shadow as subtle border
-    const boxShadow = (cs as any).boxShadow as string;
-    if (boxShadow && boxShadow !== 'none' && r.bg?.a === 0) {
-      // shadows on transparent elements are left alone
-    }
+    r.fg = cs.color === '' ? null : this.color(cs.color);
+    if (r.hasBgImage) r.gradient = mapGradient(cs.backgroundImage, this.config.tokens);
+    if (cs.boxShadow && cs.boxShadow !== 'none') r.boxShadow = mapBoxShadow(cs.boxShadow, this.config.tokens);
 
     for (const [prop, attr] of SIDES) {
       const w = parseFloat((cs as unknown as Record<string, string>)[`${prop}Width`] ?? '0');
@@ -540,6 +584,11 @@ export class ThemeEngine {
     const parent = this.infoFor(parentOf(el));
     this.processed.add(el);
 
+    if (this.config.compatibility === 'mediaOnly') {
+      this.bgInfo.set(el, parent);
+      return;
+    }
+
     if (r.kind === 'canvas') {
       this.bgInfo.set(el, parent);
       const big = r.width >= PLATE_MIN_W && r.height >= PLATE_MIN_H;
@@ -562,12 +611,6 @@ export class ThemeEngine {
       return;
     }
 
-    // MediaOnly compatibility: only handle media brightness, skip text recoloring
-    if (this.config.compatibility === 'mediaOnly') {
-      this.bgInfo.set(el, parent);
-      return;
-    }
-
     this.ownBg.delete(el);
     let { rgb, orig, locked } = parent;
 
@@ -577,8 +620,22 @@ export class ThemeEngine {
     if (r.bg === null) {
       locked = true;
     } else if (r.hasBgImage) {
-      locked = true;
-      if (r.bg.a > 0) { rgb = blend(r.bg, parent.rgb); orig = blend(r.bg, parent.orig); }
+      if (r.gradient && this.setCssValue(el, 'data-nl-gradient', r.gradient)) {
+        // Gradient stops are now dark, so descendants can be themed normally.
+        // Non-gradient images remain locked to avoid putting light text over an
+        // image that previously relied on a dark text color.
+        if (r.bg.a > 0) {
+          const mapped = mapBackground(r.bg, t);
+          this.setColor(el, 'data-nl-bg', mapped);
+          this.ownBg.add(el);
+          rgb = blend(mapped, parent.rgb);
+          orig = blend(r.bg, parent.orig);
+        }
+        locked = false;
+      } else {
+        locked = true;
+        if (r.bg.a > 0) { rgb = blend(r.bg, parent.rgb); orig = blend(r.bg, parent.orig); }
+      }
     } else if (r.bg.a > 0) {
       const mapped = mapBackground(r.bg, t);
       this.setColor(el, 'data-nl-bg', mapped);
@@ -622,6 +679,7 @@ export class ThemeEngine {
       const final = contrastRatio(mapped, rgb) >= effectiveMin ? mapped : ensureContrast(mapped, rgb, effectiveMin);
       this.setColor(el, b.attr, { ...final, a: 1 });
     }
+    if (r.boxShadow) this.setCssValue(el, 'data-nl-shadow', r.boxShadow);
 
     // Developer mode: annotate element with original vs mapped info
     if (this.config.developerMode) {

@@ -1,0 +1,54 @@
+name: Bug report
+description: Report incorrect theming, a broken control, or an extension error
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include credentials, private page content, or unrelated browsing history."
+  - type: input
+    id: version
+    attributes:
+      label: NightLens version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      placeholder: "Chrome 142 on macOS 15"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open…\n2. Select…\n3. Observe…"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include console errors or a screenshot when useful and safe to share.
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: Relevant settings
+      description: Theme, sliders, site rule, compatibility profile. Redact private hostnames.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I reloaded the extension and test tab after updating.
+        - label: I checked whether the issue also occurs with other extensions disabled.

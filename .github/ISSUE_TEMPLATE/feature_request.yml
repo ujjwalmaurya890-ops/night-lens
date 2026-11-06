@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a useful, privacy-preserving improvement
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What limitation are you experiencing? Avoid proposing a feature only for novelty.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe defaults, settings, and expected interaction.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: impact
+    attributes:
+      label: Privacy, permission, accessibility, or performance impact
+      description: Mention any new permission or collection of data. NightLens does not accept tracking or browsing-history collection.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: This request does not require analytics, remote code, or transmitting webpage content.
+        - label: I searched existing issues for a similar request.

@@ -1,86 +1,12 @@
-# Deliverables — NightLens Premium 1.0.0
+# Deliverables
 
-## 1. Source Code
-Fully upgraded source in `src/` (TypeScript strict, React 19, Vite 8, MV3):
+The historical release checklist has been superseded by the current, auditable documents:
 
-- **Modified this round:** `src/engine/engine.ts` (performance settings wired: `batchSize`/`debounceMs`/`enableCache`), `src/content/content.ts` (passes performance settings; `scheduled-off` status passed through instead of mislabeled; uses shared CSS sanitizer), `src/shared/storage.ts` (custom CSS hardened via shared sanitizer), `src/background/index.ts` (static handler import), `src/popup/App.tsx` (warmth slider in advanced section), `src/options/Options.tsx` (Websites tab: force-on/exclude rule form, per-site theme assignment, compatibility-profile form), `docs/*`, `README.md`
-- **New this round:** `src/shared/css.ts` (shared `sanitizeCustomCss`), `tests/unit/css.test.ts`
-- **Extended tests:** `tests/unit/engine.test.ts` (+4 performance-setting tests), `tests/unit/shared.test.ts` (+2 schedule tests), `tests/unit/popup.test.tsx` (+2 options-form tests)
-- **Preserved:** all prior files and behavior, incl. `src/engine/color.ts`, `src/engine/detect.ts`, build scripts, configs, e2e suite
+- [Implementation report](IMPLEMENTATION_REPORT.md) — the ten contribution areas, changed components, verification, and remaining work.
+- [Test report](TEST_REPORT.md) — commands and results from the current working tree.
+- [Architecture](ARCHITECTURE.md) — actual runtime and engine design.
+- [Feature/test matrix](FEATURE_TEST_MATRIX.md) — feature-to-test map.
+- [Known limitations](LIMITATIONS.md) — compatibility and verification boundaries.
+- [Security & Privacy](SECURITY_AND_PRIVACY.md) — permissions, storage, and input boundaries.
 
-## 2. Production Build
-`dist/` ready to load:
-- `dist/popup/index.html` + assets
-- `dist/options/index.html` + assets
-- `dist/content.js` (IIFE)
-- `dist/background.js` (IIFE)
-- `dist/manifest.json` (v1.0.0)
-- `dist/icons/icon-{16,48,128}.png`
-
-Load: `Chrome → Extensions → Developer mode → Load unpacked → dist/`
-
-## 3. Updated README
-`README.md` — premium overview, features, quick start, architecture, permissions, screenshots, testing, roadmap.
-
-## 4. Architecture Documentation
-`docs/ARCHITECTURE.md` — components, source layout, theming passes, batching, dynamic content, special content, compatibility profiles, performance.
-
-## 5. Test Suite
-- Unit: 573 tests (8 files)
-- E2E: ~40 tests (fixtures)
-- Typecheck: strict, 0 errors
-
-## 6. Test Execution Report
-`docs/TEST_REPORT.md` — breakdown, build verification.
-
-## 7. Modified Files (Detailed)
-
-| File | What Changed | Why |
-|---|---|---|
-| `package.json` | v0.1.0 → 1.0.0 | Premium release |
-| `src/manifest.json` | +alarms permission, description | Schedule |
-| `src/shared/types.ts` | +15 ThemeIds, CustomTheme, SiteOverride, Schedule, Accessibility, ReadingMode, Performance, Settings v2 (24 fields) | Premium features |
-| `src/shared/defaults.ts` | +LIMITS (warmth/saturation/accentHue/textSize/reading), DEFAULT_* objects, migrateLegacySettings | New controls |
-| `src/shared/storage.ts` | +sanitize for 10 new fields, export/import, theme import, __proto__ safe, 2000/50/20k limits | Privacy-safe persistence |
-| `src/shared/decision.ts` | +isWithinSchedule, getEffectiveTheme/Settings, schedule+followSystem logic | Automation |
-| `src/engine/palette.ts` | 10 premium presets + PREMIUM_THEME_META, buildCustomTokens, warmth/saturation/accentHue handling, legacy sepia compat | Theme engine |
-| `src/engine/mapper.ts` | +mapShadow, isLightColor, mapSelection with accentHue, saturation handling | Intelligent mapping |
-| `src/engine/styles.ts` | +readingMode, customCSS, a11y, textSize, highContrast in buildBaseCss | Advanced styling |
-| `src/engine/engine.ts` | SPA nav (history patch), code/table/modal detection, compatibility modes, textSize, developerMode, performance stats, improved read/write | Advanced DOM |
-| `src/content/content.ts` | Per-site effective settings, customCSS sanitize, schedule interval, visibilitychange, dev debug | Website management |
-| `src/background/handlers.ts` | +alarms, badge title, handleAlarm/Message | Automation & badge |
-| `src/background/index.ts` | +alarms listener, message handler | MV3 compliance |
-| `src/ui/ui.css` | Premium design system (tokens, cards, theme-grid, nav/sidebar, popup/header, dashboard, sr-only) | Premium UI/UX |
-| `src/ui/components.tsx` | LogoFull, HueSlider, ThemeCard/Grid, AppearanceControls (warmth sepia text), PresetChips, updated StatusLine | Premium components |
-| `src/ui/hooks.ts` | Auto-clear notice, useSiteStats | UX polish |
-| `src/popup/App.tsx` | Premium popup: header with h1, status badges, theme browse, presets, adjustments, advanced, footer | Premium popup |
-| `src/options/Options.tsx` | Dashboard with 9 tabs, overview stats, create custom theme, per-site management, a11y, automation, performance, privacy, about | Premium dashboard |
-
-## 8. Newly Created Files
-
-- `docs/TEST_REPORT.md` — test execution report
-- `docs/DELIVERABLES.md` — this file
-- (Existing docs updated): `docs/ARCHITECTURE.md`, `docs/SECURITY_AND_PRIVACY.md`, `docs/LIMITATIONS.md`, `docs/INSTALL.md`, `docs/FEATURE_TEST_MATRIX.md`, `docs/BROWSER_TEST_CHECKLIST.md`, `docs/TROUBLESHOOTING.md`
-- (Build artifacts): `dist/*`
-
-## 9. Known Limitations
-See `docs/LIMITATIONS.md` — 17 documented limitations (hover, gradients, logos, canvas plates, elevation inversion, !important, closed shadow roots, etc.) + unverified items + 10-item roadmap.
-
-## 10. Windows Installation Guide
-`docs/INSTALL.md` → Windows section (winget/choco, PowerShell, execution policy).
-
-## 11. Chrome Installation Guide
-`docs/INSTALL.md` → Load unpacked steps + debugging + updating.
-
-## 12. Roadmap
-`README.md` + `docs/LIMITATIONS.md` Future Work: hover preservation, logo inversion, early-paint cache, Firefox/Edge, visual regression, etc.
-
-## Verification
-
-```bash
-npm run typecheck # ✓
-npm test          # ✓ 573 passed
-npm run build     # ✓ dist/
-```
-
-All features are real — no fake buttons, no TODO placeholders, every visible control does something.
+The production extension is generated in `dist/` by `npm run build`. The repository root `nightlens.zip` is a pre-existing packaged artifact; use a fresh build when validating source changes.

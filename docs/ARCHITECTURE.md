@@ -1,118 +1,112 @@
 # Architecture
 
-## Components
+## Runtime model
 
+```text
+Popup / Options ── writes ──> chrome.storage.local ("nightlens:settings")
+                                   │ onChanged
+                                   ▼
+HTTP/HTTPS content script ──> decide() + effective per-site settings
+        │                              │
+        │                              ▼
+        │                       ThemeEngine (one per frame)
+        │                              │
+        │                              ├─ palette + color mapper
+        │                              ├─ computed-style reads
+        │                              ├─ generated attribute rules
+        │                              └─ mutations + SPA + shadow roots
+        ▼
+Validated status messages ──> Popup
+
+MV3 service worker: command, install/startup badge, settings export messages
 ```
-            chrome.storage.local  ("nightlens:settings")
-                 ▲        │ onChanged
-   writes        │        ▼
- ┌──────────┐    │   ┌──────────────────────────────┐   status push / get-status
- │ Popup /  │────┘   │ Content script (every frame) │──────────────────────────────► Popup
- │ Options  │        │  decide() → ThemeEngine      │◄──── tabs.sendMessage(frameId:0)
- └──────────┘        └──────────────────────────────┘
- ┌──────────────────────┐
- │ Service worker       │  Alt+Shift+D toggles enabled; badge OFF; schedule alarm (alarms)
- └──────────────────────┘
-```
 
-- **Storage is the bus.** Popup, options, worker only *write* settings. Every content script listens to `chrome.storage.onChanged` and re-applies. No push sync issues.
-- **Messages:** popup → top frame `get-status`; top frame → popup `status-changed` + `debug-info`. Validated (`src/shared/messages.ts`), sender.id checked; popup validates tab.id & frameId===0.
-- **Popup needs no `tabs` permission** — it asks the content script for hostname.
+Storage is the synchronization bus. The popup/options write settings; every content script subscribes to changes and reconfigures its engine. The popup asks the top-frame content script for hostname/status, so no `tabs` permission is needed. Messages use validators in `src/shared/messages.ts` and check extension/tab/frame identity.
 
-## Source Layout
+The service worker has no periodic alarm. Schedules and system/reduced-motion media queries are evaluated in active content scripts. Page unload cleanup releases listeners, timers, observers, styles, and subscriptions; BFCache navigations remain intact.
 
-```
+## Source layout
+
+```text
 src/
-  manifest.json            MV3 template (version from package.json)
+  manifest.json            MV3 template; build injects package version
   shared/
-    types.ts               ThemeId (15 incl. 10 premium + custom/system), Settings v2, CustomTheme, Schedule, Accessibility, ReadingMode
-    defaults.ts            LIMITS, cloneDefaults(), migrateLegacySettings() (v1→v2)
-    hostname.ts            normalizeHostname (exact, no subdomain inheritance), hostnameFromUserInput, getSiteMode
-    storage.ts             sanitizeSettings (strict), load/update/reset/subscribe, export/import, theme import
-    css.ts                 sanitizeCustomCss — shared custom-CSS hardening (no remote url()/@import/@font-face/javascript:), used on write and at injection
-    messages.ts            GET_STATUS / STATUS_CHANGED validation
-    decision.ts            decide() (enabled, siteRules, system, schedule), getEffectiveTheme/Settings, isWithinSchedule
+    types.ts               Settings, theme IDs, site/status types
+    defaults.ts            Defaults, limits, legacy migration
+    hostname.ts            Normalization and nearest-host rule lookup
+    storage.ts             Sanitization, queued writes, subscriptions, import/export
+    decision.ts            Global/site/system/schedule decisions and effective settings
+    css.ts                 Conservative custom-CSS validation
+    messages.ts            Message types and validators
   engine/
-    color.ts               parse (rgb/hex/hsl/oklab/oklch/lab/lch/color()), WCAG luminance/contrast, ensureContrast, toHex/colorKey
-    palette.ts             PRESETS (15 themes: 3 legacy + 10 premium + system/custom), PREMIUM_THEME_META, buildTokens (brightness/contrast/warmth/saturation/accentHue, custom theme support), themePreviewColors
-    mapper.ts              mapBackground/Foreground/Link/Border, isColoredLink, mapShadow, isLightColor
-    styles.ts              buildBaseCss (variables, selection, placeholder, focus, early-paint guard, readingMode, accessibility, customCSS)
-    detect.ts              detectNativeDark (luminance <0.2 or color-scheme)
-    engine.ts              ThemeEngine: traversal, batching, observers, attribute+rule generation, restore, SPA nav, performance stats, developerMode
-  content/
-    content.ts             getSiteHostname (top frame aware), startContentScript: load settings → decide → tokens → engine.start/update, schedule interval, visibilitychange
-    index.ts               bootstrap
-  background/
-    handlers.ts            updateBadge, handleCommand (toggle), handleInstalled/Startup, handleAlarm (schedule), handleMessage
-    index.ts               registers listeners synchronously (MV3 requirement)
-  popup/  options/  ui/    React 19 UI, shared hooks/components, premium design tokens (ui.css)
-    ui/ ui.css             Premium tokens (Linear/Raycast/Arc inspired), components (Switch, Slider, ThemeCard, ThemeGrid, PresetChips)
-    ui/ hooks.ts           useSettings (with auto-clear notice), usePageStatus, useSiteStats
-    ui/ components.tsx     Logo, ThemeSelect/Slider/HueSlider, ThemeCard/Grid, AppearanceControls, StatusLine, PresetChips
-scripts/                   build.mjs (Vite JS API, IIFE for content/background), make-icons.mjs
-tests/unit/                Vitest jsdom: color, theme, shared, engine, background, ui-contrast, popup
-tests/e2e/                 Playwright + local fixtures (news/docs/edu/shop/search/spa/webapp/modern/codehost/dark)
+    color.ts               Color parsing, alpha blending, luminance, contrast
+    palette.ts             Presets/custom themes and visual adjustments
+    mapper.ts              Background/text/link/border/gradient/shadow mapping
+    detect.ts              Native-dark heuristic
+    styles.ts              Static theme/accessibility/reading-mode CSS
+    engine.ts              DOM traversal, batching, dynamic rules, lifecycle
+  content/                 Settings orchestration, status, cleanup
+  background/              Command, badge, installation, and message handlers
+  popup/                   React toolbar UI
+  options/                 React settings dashboard
+  ui/                      Shared components, hooks, icons, and styles
+scripts/build.mjs          Vite UI bundles + IIFE worker/content bundles
 ```
 
-## How Theming Works
+## Per-site resolution
 
-1. **Read** computed `backgroundColor`, `color`, per-side border colors, `backgroundImage`, disabled, link, control, code/table/modal flags, dimensions.
-2. **Map** via `mapper.ts` through `ThemeTokens` (derived from preset + sliders + per-site overrides + custom themes), then `ensureContrast` against effective background (nearest mapped ancestor, alpha-blended).
-3. **Write** only `data-nl-*` attributes (color keys) + generated rules `[data-nl-bg="..."]{background-color:#... !important}`.
+Hostnames are lower-cased and one trailing dot is removed. Rules for a multi-label DNS hostname walk from the exact host toward parent domains. The nearest entry wins:
 
-- **Exact restoration:** Removing attributes + `<style data-nl-owned>` restores `outerHTML` identically (unit-tested).
-- **Cross-origin stylesheets:** Computed-style based, no `styleSheets` parsing.
-- **CSP:** Extension styles not subject to page CSP (e2e verified `style-src 'self'`).
-- **No feedback loop:** Only writes `data-nl-*`, which observer ignores (quiescence test).
+```text
+example.com: off
+docs.example.com: on
+v1.docs.example.com → on (nearest entry is docs.example.com)
+www.example.com → off
+notexample.com → no match
+```
 
-### Passes & Batching
+IPv4/IPv6 and single-label rules are exact-only. Theme assignments, `siteOverrides`, compatibility profiles, and custom CSS use the same lookup. A `siteOverrides.theme` takes priority over the older `siteThemes` entry. Global off always wins; site force-on bypasses native-dark detection and schedule/system waiting where documented.
 
-`strip → read → write` per batch ≤400 (tunable, 100–1000), RAF-scheduled; reads share one recalc, then writes. Queue is `Set` (dedup), `WeakSet` for processed. Performance stats logged when `developerMode` on.
+## Theming pass
 
-### Dynamic Content
+1. **Traverse** in document order, skipping non-rendered/media/replaced elements and extension-owned styles. Open shadow roots get their own style context.
+2. **Strip** old managed attributes for elements being reprocessed.
+3. **Read** computed background/foreground/border/gradient/shadow values in one batch. Effective background information is retained in weak maps.
+4. **Map** colors through theme tokens. Light backgrounds become dark while hues and important distinctions are retained where practical.
+5. **Write** `data-nl-*` attributes and deduplicated generated rules. Text and control borders are adjusted toward configured contrast targets against the nearest known effective background.
 
-One `MutationObserver` (childList + class/style, subtree) per root (document + open shadow roots):
+Disabling removes generated styles and managed attributes; the original author styles remain in place.
 
-- Added nodes → subtree enqueue (SPA, infinite scroll).
-- class change → re-read element + subtree if ≤2000 descendants.
-- style change → only if mentions color/background/border/fill/stroke/shadow.
-- html/body class/data-theme/style → debounce native-dark re-eval + rescan.
-- `<link> load` + `window.load` → rescan (late CSS).
-- **SPA navigation:** `history.pushState/replaceState` patched + `popstate`/`hashchange` → debounce rescan / re-eval.
+### Gradients, shadows, and images
 
-### Special Content
+Literal linear/radial/conic gradient color stops are remapped without changing direction, geometry, or positions. Shadow colors are darkened/softened while dimensions and inset behavior are retained. Generated declarations reject `url()` and CSS delimiters and use `CSS.supports` validation where available.
 
-| Content | Handling |
-|---|---|
-| img/picture/video/audio/iframe/object/embed | Never touched/walked. Dim theme `brightness(0.88)` on img/video/picture only. |
-| background-image/gradient or unparsable color | Locked: author colors kept, descendants’ text also left alone. |
-| canvas ≥100×60 on light backdrop; svg charts ≥100×60 with <text> | Plate on original backdrop, pixels untouched. |
-| Small SVG icons ≤64px | Shape fill/stroke recoloured ≥3:1 contrast. Large illustrations untouched. |
-| Open shadow roots | Own style pair + observer. Closed not reachable. |
-| code/pre/kbd/samp | Preserved hue but ensured contrast (syntax highlighting). |
-| table/th/td | Ensured header distinct, border handling. |
-| input/select/textarea/button (control) | Per-control border contrast, cursor visibility, `color-scheme: dark`. |
-| modal/dialog/notification (role=dialog/alertdialog or .modal) | Tracked as modal for future emphasis (currently standard mapping). |
-| Native select/scrollbars | `color-scheme: dark` on :root. |
-| Native dark sites | Detached-style luminance or `color-scheme: dark` → left alone; force-on overrides. |
-| text-size | `html{font-size: X% !important}` in base CSS when textSize ≠100. |
-| reading mode | Body max-width, line-height, font-family, hide nav/aside/.ad. |
-| custom CSS | Validated (no javascript:/expression/@import), appended to base. |
-| developer mode | `data-nl-dev="orig:...|mapped:..."` + stats to console/onStats. |
+Non-gradient background images are different: the element and descendants are left author-controlled to avoid destroying intentional text overlays. Contrast cannot be guaranteed over arbitrary images or every point of a gradient.
 
-### Compatibility Profiles
+### Media and SVG
 
-- **auto** (default): Standard mapping.
-- **gentle:** Never force on native-dark.
-- **aggressive:** 1.5× batch size, more eager.
-- **mediaOnly:** Only dim media, skip text recoloring.
+- `img`, `video`, `audio`, `picture`, sources, tracks, frames, objects, and embeds are not traversed or inverted.
+- Normal themes do not filter photographs/videos. Media-only mode applies an explicit 0.88 brightness filter to images/videos and skips color processing.
+- Small SVG icons (up to 64px, bounded shape count) may have fill/stroke adjusted to at least the graphic contrast target.
+- Large SVG illustrations are preserved. Large canvases and text-bearing SVG charts can receive the original light backdrop as a plate; pixels are not edited.
+- Closed shadow roots are inaccessible; open roots are supported.
 
-### Performance Optimizations
+## Dynamic content and performance
 
-- Color parse cache (Map, clear after 2000 entries, hit counter) — toggleable via `performance.enableCache`.
-- Batch size and mutation debounce come from `settings.performance` (`maxElementsPerFrame`, `debounceMs`) and are passed into `EngineConfig` (`batchSize`, `debounceMs`) by the content script — the Performance settings page controls the real engine, not a dead UI.
-- One recalc per batch, RAF + dedup.
-- Filtered style attribute changes (regex).
-- History patching avoids polling.
-- Alarms for schedule (1 min), not aggressive polling.
-- Max 5000 rules then clear (prevent bloat).
+- One tree `MutationObserver` observes the document and open shadow roots for child-list/class/style changes.
+- Added nodes enter a `Set`-deduplicated queue. Class changes traverse once with a 2,000-element cap; irrelevant style churn is ignored.
+- Work is time-sliced with `requestAnimationFrame` (default 400 elements/frame, configurable 100–1,000). Each batch performs strip → reads → writes.
+- Parsed colors use a bounded cache (approximately 2,000 entries), which can be disabled.
+- Generated rules are deduplicated per document/shadow context, with a 5,000-rule reset safeguard.
+- Root theme attribute changes are debounced (default 150ms) to re-run native-dark detection and reprocess.
+- `pushState`, `replaceState`, `popstate`, and `hashchange` trigger debounced SPA reprocessing. History methods and listeners are restored on stop.
+- Stylesheet/window load triggers rescanning. Removed shadow-host contexts are pruned.
+- Queued animation frames, timers, observers, and listeners are cancelled/disconnected during teardown.
+
+Performance settings are real engine inputs, not decorative controls. No claim is made that every large page has identical CPU or memory behavior; see [Limitations](LIMITATIONS.md).
+
+## Build and tests
+
+`npm run build` creates popup/options assets and single-file IIFE bundles for the content script and service worker, writes the versioned manifest, and creates icons. The extension uses no remote code.
+
+Vitest/jsdom covers pure color/settings logic, engine behavior, and React interactions. Playwright loads `dist/` into real Chromium and uses local fixtures for browser-level checks. jsdom tests are not substitutes for paint, screen-reader, physical keyboard, or cross-browser verification.

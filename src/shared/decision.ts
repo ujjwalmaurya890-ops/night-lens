@@ -1,4 +1,4 @@
-import { getSiteMode } from './hostname';
+import { getSiteEntry, getSiteMode } from './hostname';
 import type { Settings, SiteMode, SiteStatus } from './types';
 
 export type Decision =
@@ -31,12 +31,12 @@ export function decide(settings: Settings, hostname: string | null, systemPrefer
   if (settings.schedule.enabled && !isWithinSchedule(settings.schedule, now)) {
     // If site is forced on, schedule doesn't block it
     if (siteMode !== 'on') {
-      return { active: false, status: 'scheduled-off' as any, siteMode };
+      return { active: false, status: 'scheduled-off', siteMode };
     }
   }
 
   if (siteMode === 'off') return { active: false, status: 'excluded', siteMode };
-  if (settings.theme === 'system' && !systemPrefersDark) return { active: false, status: 'waiting-for-system', siteMode };
+  if (settings.theme === 'system' && !systemPrefersDark && siteMode !== 'on') return { active: false, status: 'waiting-for-system', siteMode };
   // Also respect schedule.followSystem if enabled
   if (settings.schedule.followSystem && !systemPrefersDark && !siteMode) {
     return { active: false, status: 'waiting-for-system', siteMode };
@@ -44,33 +44,24 @@ export function decide(settings: Settings, hostname: string | null, systemPrefer
   return { active: true, forceNative: siteMode === 'on', siteMode };
 }
 
-export function shouldApplyPerSiteTheme(settings: Settings, hostname: string | null): string | null {
-  if (!hostname) return null;
-  return settings.siteThemes[hostname] ?? null;
-}
-
 export function getEffectiveTheme(settings: Settings, hostname: string | null): string {
-  if (hostname) {
-    const perSite = settings.siteThemes[hostname];
-    if (perSite) return perSite;
-    const override = settings.siteOverrides[hostname];
-    if (override?.theme) return override.theme;
-  }
-  return settings.theme;
+  return getEffectiveSettings(settings, hostname).theme;
 }
 
 export function getEffectiveSettings(settings: Settings, hostname: string | null): Settings {
   if (!hostname) return settings;
-  const override = settings.siteOverrides[hostname];
-  if (!override) return settings;
+  const override = getSiteEntry(settings.siteOverrides, hostname);
+  const assignedTheme = getSiteEntry(settings.siteThemes, hostname);
+  const warmth = override?.warmth ?? settings.warmth;
   return {
     ...settings,
-    theme: override.theme ?? settings.theme,
-    brightness: override.brightness ?? settings.brightness,
-    contrast: override.contrast ?? settings.contrast,
-    warmth: override.warmth ?? settings.warmth,
-    sepia: override.warmth ?? settings.sepia,
-    saturation: override.saturation ?? settings.saturation,
+    // An explicit per-site override is more specific than the older siteThemes map.
+    theme: override?.theme ?? assignedTheme ?? settings.theme,
+    brightness: override?.brightness ?? settings.brightness,
+    contrast: override?.contrast ?? settings.contrast,
+    warmth,
+    sepia: warmth,
+    saturation: override?.saturation ?? settings.saturation,
   };
 }
 

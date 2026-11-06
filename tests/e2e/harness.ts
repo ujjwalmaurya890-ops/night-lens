@@ -6,7 +6,7 @@ import { join, resolve, extname } from 'node:path';
 
 export const DIST = resolve(process.cwd(), 'dist');
 const FIXTURES = resolve(process.cwd(), 'tests/e2e/fixtures');
-const CHROMIUM = process.env.NIGHTLENS_CHROMIUM ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROMIUM = process.env.NIGHTLENS_CHROMIUM ?? chromium.executablePath();
 export const PORT_A = 4101;
 export const PORT_B = 4102;
 export const ORIGIN_A = `http://127.0.0.1:${PORT_A}`; // hostname "127.0.0.1"

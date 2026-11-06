@@ -50,7 +50,7 @@ export function cloneDefaults(): Settings {
   return {
     schemaVersion: 2,
     enabled: true,
-    theme: 'balanced',
+    theme: 'midnight',
     brightness: LIMITS.brightness.default,
     contrast: LIMITS.contrast.default,
     sepia: LIMITS.sepia.default,

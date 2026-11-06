@@ -1,4 +1,4 @@
-import { clamp, hslToRgb, rgbToHsl, type RGB, type RGBA } from './color';
+import { clamp, hslToRgb, parseColor, rgbToHsl, type RGB, type RGBA } from './color';
 import type { ThemeTokens } from './palette';
 
 /** Below this HSL saturation a colour is treated as grey and re-tinted with the theme's neutral hue. */
@@ -59,18 +59,37 @@ export function mapBorder(c: RGB, t: ThemeTokens): RGB {
   return hslToRgb({ h: neutral ? t.neutralHue : hsl.h, s: neutral ? t.neutralSat : Math.min(hsl.s * COLOR_SAT_DAMPING, COLOR_SAT_CAP), l });
 }
 
-// New: handle shadows and gradients detection
-export function isLightColor(c: RGB): boolean {
-  return rgbToHsl(c).l > 0.6;
-}
-
 export function mapShadow(c: RGBA, t: ThemeTokens): RGBA {
-  // Shadows should be subtle in dark mode – reduce opacity and map color to dark
   const mapped = mapBackground({ ...c, a: 1 }, t);
-  return { ...mapped, a: c.a * 0.5 };
+  return { ...mapped, a: c.a * 0.65 };
 }
 
-export function mapSelection(_c: RGB, t: ThemeTokens): RGB {
-  // Map selection backgrounds to theme accent
-  return t.colors.selectionBg;
+const CSS_COLOR_RE = /#[\da-f]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)|oklab\([^)]*\)|oklch\([^)]*\)|lab\([^)]*\)|lch\([^)]*\)|color\([^)]*\)/gi;
+
+function serialize(c: RGBA): string {
+  const channel = (n: number) => String(Math.round(n));
+  return c.a >= 1
+    ? `rgb(${channel(c.r)}, ${channel(c.g)}, ${channel(c.b)})`
+    : `rgba(${channel(c.r)}, ${channel(c.g)}, ${channel(c.b)}, ${Math.round(c.a * 1000) / 1000})`;
+}
+
+function mapCssColors(value: string, t: ThemeTokens, mapper: (c: RGBA, t: ThemeTokens) => RGBA): string {
+  return value.replace(CSS_COLOR_RE, (token) => {
+    // parseColor is intentionally strict; unknown modern functions stay untouched.
+    const parsed = parseColor(token);
+    return parsed ? serialize(mapper(parsed, t)) : token;
+  });
+}
+
+/** Remap literal gradient stops while preserving geometry, direction and color hints. */
+export function mapGradient(value: string, t: ThemeTokens): string | null {
+  if (!/(?:linear|radial|conic)-gradient\(/i.test(value) || /url\s*\(/i.test(value)) return null;
+  if (/[;{}]/.test(value)) return null;
+  return mapCssColors(value, t, mapBackground);
+}
+
+/** Preserve shadow geometry and inset/spread while softening and darkening its colors. */
+export function mapBoxShadow(value: string, t: ThemeTokens): string | null {
+  if (!value || value === 'none' || /[;{}]|url\s*\(/i.test(value)) return null;
+  return mapCssColors(value, t, mapShadow);
 }
