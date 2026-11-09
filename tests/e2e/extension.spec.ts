@@ -390,6 +390,35 @@ test.describe('popup (real extension page)', () => {
     await expect(popup.getByText(/can’t run on this page/)).toBeVisible();
   });
 
+  test('options page: a purpose preset and a per-site override reach the live page', async ({ context, extensionId, setSettings }) => {
+    await setSettings(settings());
+    const page = await context.newPage();
+    await open(page, 'docs.html');
+    const options = await context.newPage();
+    await options.goto(`chrome-extension://${extensionId}/options/index.html`);
+
+    const bodyBg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const beforePreset = await bodyBg();
+    await options.getByRole('button', { name: 'Themes' }).click();
+    // The preview reflects the palette before anything is applied to the page.
+    await expect(options.getByLabel('Theme preview')).toBeVisible();
+    await options.getByRole('button', { name: 'High contrast' }).click();
+    await page.waitForFunction((prev) => getComputedStyle(document.body).backgroundColor !== prev, beforePreset);
+
+    const beforeOverride = await bodyBg();
+    await options.getByRole('button', { name: 'Websites' }).click();
+    await options.getByLabel('Override website').fill('127.0.0.1');
+    // Range inputs cannot be filled directly; set the value the way React expects to see it.
+    await options.getByLabel('Override brightness').evaluate((el) => {
+      const input = el as HTMLInputElement;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '70');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await options.getByRole('button', { name: 'Save override' }).click();
+    await page.waitForFunction((prev) => getComputedStyle(document.body).backgroundColor !== prev, beforeOverride);
+    expect(await auditContrast(page, 4.5)).toEqual([]);
+  });
+
   test('options page: add/remove an excluded site and meets contrast', async ({ context, extensionId, setSettings }) => {
     await setSettings(settings());
     const page = await context.newPage();

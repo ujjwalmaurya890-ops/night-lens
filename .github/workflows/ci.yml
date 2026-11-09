@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
+# Least privilege: the workflow only reads the checkout and uploads artifacts.
 permissions:
   contents: read
 
@@ -12,26 +14,124 @@ concurrency:
   group: nightlens-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: '22'
+
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: Type check, unit tests, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Third-party actions are pinned to immutable commit SHAs (with the human-readable
+      # version in a comment) so a moved tag cannot change what runs in CI.
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: 22
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+
+      - name: Install dependencies (lockfile only)
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Verify the built manifest is minimal
+        run: |
+          node -e '
+            const m = require("./dist/manifest.json");
+            if (m.manifest_version !== 3) throw new Error("expected Manifest V3");
+            if (JSON.stringify(m.permissions) !== JSON.stringify(["storage"])) throw new Error("unexpected permissions: " + JSON.stringify(m.permissions));
+            if ((m.host_permissions ?? []).length !== 0) throw new Error("host permissions must stay empty");
+            console.log("manifest OK:", JSON.stringify({ permissions: m.permissions, host_permissions: m.host_permissions }));
+          '
+
+      - name: Upload extension bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nightlens-dist
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Verification"
+            echo ""
+            echo "| Step | Result |"
+            echo "|---|---|"
+            echo "| Type check | ${{ job.status }} |"
+            echo "| Unit/integration tests | ${{ job.status }} |"
+            echo "| Production build | ${{ job.status }} |"
+            echo ""
+            echo "Browser tests run in the \`e2e\` job."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    name: Browser tests (Chromium + extension)
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies (lockfile only)
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # The extension under test is built from the same commit the unit job verified.
+      - name: Build and run Playwright suite
+        run: npm run test:e2e
+
+      - name: Upload Playwright results
         if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-results
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Browser tests"
+            echo ""
+            echo "Result: ${{ job.status }}"
+            echo ""
+            echo "Playwright artifacts are uploaded when the job fails."
+          } >> "$GITHUB_STEP_SUMMARY"

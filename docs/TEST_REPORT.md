@@ -1,52 +1,85 @@
 # Test report
 
-**Verification date:** 2026-11-06
-**Working tree:** `arena/f283cf16-night-lens` (uncommitted changes)
+**Verification date:** 2026-11-09
+**Branch:** `arena/bfb506ae-night-lens`
+**Working tree:** committed (see [FINAL_ENGINEERING_REPORT.md](FINAL_ENGINEERING_REPORT.md#d-git-summary))
+
+Only executed results are listed. Anything that could not be executed is stated as such.
 
 ## Executed successfully
 
-| Check | Result | Evidence |
-|---|---|---|
-| `npm ci` | Pass | 107 packages installed in the initial verification; dependency audit completed. |
-| `npm run typecheck` | Pass | Strict TypeScript, no errors. |
-| `npm test` | **606/606 passed** | 9 Vitest/jsdom files; no failures. |
-| `npm run build` | Pass | Production Manifest V3 extension generated in `dist/`. |
-| `npm audit --audit-level=high` | **0 vulnerabilities** | Point-in-time result, not a continuing supply-chain guarantee. |
-| `git diff --check` | Pass | No whitespace errors at the time of the check. |
-| Unsafe source-pattern scan | No matches | No `fetch(`, XHR, WebSocket, beacon, eval, `new Function`, `innerHTML`, `document.write`, or browser web-storage APIs in `src/`. |
-| Manifest review | Pass | Only `storage` permission; HTTP/HTTPS content scripts and configurable command retained. |
+| Check | Command | Result | Evidence |
+|---|---|---|---|
+| Dependency install | `npm ci` | Pass | Lockfile respected, no install errors. |
+| Type check | `npm run typecheck` | **Pass** | `tsc --noEmit`, strict mode, 0 errors. |
+| Unit / integration | `npm test` | **701 / 701 passing** | 15 Vitest files in jsdom, ~65 s. Breakdown below. |
+| Production build | `npm run build` | **Pass** | `dist/` built; manifest version injected from `package.json`. |
+| Built manifest review | `node -e` on `dist/manifest.json` | **Pass** | `permissions: ["storage"]`, `host_permissions: []`, `manifest_version: 3`. |
+| Playwright test discovery | `npx playwright test --list` | Pass | 42 tests discovered in `tests/e2e/extension.spec.ts`. |
 
-### Unit/integration coverage
+## Unit / integration coverage (measured)
 
 | File | Tests | Main coverage |
 |---|---:|---|
-| `background.test.ts` | 4 | Global keyboard-command handler, badge, install/startup persistence. |
-| `color.test.ts` | 35 | Hex/RGB/HSL/modern color parsing, alpha, conversion, WCAG contrast. |
-| `css.test.ts` | 7 | Ordinary CSS, URL restrictions, data-image policy, comment/escape obfuscation, storage sanitization. |
-| `engine.test.ts` | 31 | Background/foreground/border mapping, readable controls, images/media, SVG/canvas, shadow DOM, gradients/shadows, restoration, dynamic DOM, batching/cache/debounce, native-dark changes. |
-| `popup.test.tsx` | 21 | Global/site toggles, status filtering, themes/sliders, failure notices, reset confirmation, accessible names, options forms, website-preference reset. |
-| `shared.test.ts` | 50 | Host normalization/inheritance/specificity, settings sanitization, queued writes, imports, effective site settings, schedule/system decisions, message validation. |
-| `theme.test.ts` | 417 | All theme IDs × brightness/contrast/warmth extremes, custom-theme warmth, normal media preservation, explicit media-only dimming, mapper behavior. |
-| `ui-contrast.test.ts` | 40 | Extension UI text/control/focus contrast and reduced-motion rules. |
-| `content.test.ts` | 1 | Duplicate-injection guard and final-pagehide listener/style cleanup. |
+| `theme.test.ts` | 417 | Every theme id × brightness/contrast/warmth extremes, custom-theme warmth, media handling, mapper behaviour |
+| `shared.test.ts` | 50 | Host normalisation/inheritance, settings sanitisation, queued writes, imports, schedules/system decisions, message validation |
+| `ui-contrast.test.ts` | 40 | Extension UI token contrast (text ≥ 4.5:1, non-text ≥ 3:1), reduced-motion rule, zero `!important`/remote URLs in CSS |
+| `color.test.ts` | 39 | hex/rgb/hsl/oklab/lab/display-p3/hwb parsing, the CSS named-colour table, contrast maths, deterministic adjustment |
+| `engine.test.ts` | 31 | Background/foreground/border mapping, controls, media, SVG/canvas plates, gradients/shadows, shadow DOM, dynamic DOM, batching/cache/debounce, native-dark changes |
+| `security.test.ts` | 22 | Message validators, worker sender/type checks, sanitised replies, minimal diagnostics payload, stale-context recovery, storage bounds |
+| `popup.test.tsx` | 21 | Popup and options behaviour, persistence, failure notices, reset confirmation, per-site rules |
+| `ui-accessibility.test.tsx` | 18 | Accessible names on every tab, unique ids, skip link, sidebar arrow keys, live regions, live theme preview, override editor, purpose presets |
+| `engine-hardening.test.ts` | 17 | Dynamic attribute detection, large single insertion, native-dark meta/CSS-variable paths, shared history patch, shadow-host removal, config fingerprint, rect elision, restoration cycles |
+| `presets.test.ts` | 14 | Purpose-preset application, persistence through sanitisation, contrast floors, no side effects on unrelated settings |
+| `privacy.test.ts` | 11 | No network/eval/HTML-injection APIs, no tracking deps, minimal permissions, `chrome.storage.local` only, documented data flows |
+| `detect.test.ts` | 9 | Native-dark heuristic ordering (background, meta, CSS property, design-system variable) |
+| `css.test.ts` | 7 | Custom-CSS validation, URL policy, obfuscation rejection |
+| `background.test.ts` | 4 | Command toggle, badge, install/startup |
+| `content.test.ts` | 1 | Duplicate-injection guard, pagehide cleanup |
 
-These are unit/integration tests, not proof of universal live-site behavior. jsdom does not validate actual paint, browser layout, physical shortcuts, or assistive technology.
+Baseline before this work: 606 tests in 9 files, all passing. **+95 tests, 0 tests deleted or
+weakened.** Two existing tests were updated only where behaviour intentionally changed… in fact none
+had to be changed: the whole pre-existing suite passes unmodified. The only edits to existing test
+files were additive (`color.test.ts`) and a one-line selector update in
+`tests/unit/popup.test.tsx` was **not** required.
 
-## Browser E2E status
+## Not executed here: browser E2E
 
-**Not executed in this sandbox.** No compatible Chromium executable was present. `npx playwright install chromium` was attempted, but the browser download from `cdn.playwright.dev` failed because the sandbox could not establish the TLS connection. Therefore no new E2E pass, screenshot, browser console check, or live-site result is claimed.
+`npm run test:e2e` was **not** run in the environment where this report was produced.
 
-The Playwright suite was updated for portable browser resolution (`chromium.executablePath()` or `NIGHTLENS_CHROMIUM`) and includes a real-browser gradient/shadow/media fixture test. The CI workflow installs Chromium and runs the suite. It still needs to run locally or in CI before this working tree is considered browser-verified.
+- `npx playwright install --with-deps chromium` fails: the Chromium/Chrome-for-Testing download
+  host is unreachable from this sandbox (`Download failure, code=1`), and
+  `npx playwright install chromium` fails the same way.
+- No system Chromium/Chrome binary is present (`which chromium`, `google-chrome`, … all empty), so
+  `NIGHTLENS_CHROMIUM` cannot point at one either.
+- `npx playwright test --list` confirms the 42 tests are discoverable and type-correct, but
+  discovery is not execution.
 
-To verify:
+Therefore **no browser-level pass, screenshot, or live-site result is claimed for this change set.**
+`.github/workflows/ci.yml` runs the suite on `ubuntu-24.04` with `npx playwright install --with-deps
+chromium` in the `e2e` job. One new browser test was added
+(`options page: a purpose preset and a per-site override reach the live page`) and is unverified
+until CI runs it; it is written against unit-tested behaviour (the preset writes theme/brightness/
+contrast and the override writes `siteOverrides`) and uses the existing harness helpers.
 
-```bash
-npx playwright install chromium
-npm run test:e2e
-```
+## Static checks performed manually (and now automated)
 
-For a manual browser check, load the freshly built `dist/` directory and follow [Browser test checklist](BROWSER_TEST_CHECKLIST.md). In particular, verify popup visuals/keyboard order, gradient rendering, dynamic SPAs, native-dark behavior, and error consoles.
+| Check | Result |
+|---|---|
+| No network APIs in `src/` | 0 matches — automated in `privacy.test.ts` |
+| No `eval` / `new Function` / `innerHTML` / `document.write` | 0 matches — automated |
+| No `localStorage` / `sessionStorage` / IndexedDB | 0 matches — automated |
+| No `chrome.history`, `chrome.cookies`, `chrome.webRequest`, `chrome.scripting` | 0 matches — automated |
+| Manifest permissions | `storage` only; no host permissions, no `externally_connectable` — automated |
+| `any` in `src/` | Removed from storage sanitiser, palette preview helper and UI debug consumer; two narrowed casts remain in the history patch (`Parameters<...>` args) |
+| UI CSS `!important` count | 0 — automated in `ui-contrast.test.ts` |
 
-## Historical results
+## Known verification gaps
 
-Older documentation contained different test totals and browser results from earlier revisions. They are not presented as evidence for the current changes. Current executed results are limited to the commands listed above.
+- Real-browser paint, first-paint flash timing, GPU/memory behaviour, and battery impact: not
+  measured.
+- Screen-reader interaction, OS high-contrast mode, RTL, print, and zoom/DPI combinations: not
+  tested, only reasoned about from markup and CSS.
+- Physical `Alt+Shift+D` key press: cannot be simulated; the command registration and the handler
+  are tested separately (unit + the existing browser test asserting registration).
+- Cross-origin iframe theming is covered by a fixture in the browser suite only.
