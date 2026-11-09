@@ -96,9 +96,9 @@ Additional fixture screenshots are in [`docs/screenshots/`](docs/screenshots/). 
 | Check | Result in this repository |
 |---|---|
 | `npm run typecheck` | Pass — strict TypeScript, no errors |
-| `npm test` | Pass — 701 Vitest tests across 15 files (engine, colour, storage, UI, accessibility, security, privacy invariants) |
+| `npm test` | Pass — 704 Vitest tests across 15 files (engine, colour, storage, UI, accessibility, security, privacy invariants) |
 | `npm run build` | Pass — Manifest V3 bundle in `dist/` |
-| `npm run test:e2e` | Runs in GitHub Actions on Chromium. Not executed in the environment where the documentation was last updated (no browser could be installed); no browser result is claimed beyond what [the test report](docs/TEST_REPORT.md) records. |
+| `npm run test:e2e` | Pass in CI — 42 Playwright tests in real Chromium with the extension loaded, [run 42561937603](https://github.com/ujjwalmaurya890-ops/night-lens/actions/runs/42561937603) |
 
 Claims in this README are limited to what those checks demonstrate. Per-site behaviour on live
 websites is heuristic; see [Known limitations](docs/LIMITATIONS.md).

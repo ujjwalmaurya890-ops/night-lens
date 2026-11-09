@@ -44,9 +44,9 @@ What changed, concretely:
 7. **CI is hardened.** Two jobs pinned to immutable action SHAs, Playwright browser caching, a
    minimal-permission manifest assertion on the *built* bundle, and artifact upload only on failure.
 
-**Test count: 606 → 701 (+95), 9 → 15 files, 0 deleted.** Typecheck and build pass. Browser tests
-could not be executed in this environment (Chromium download is blocked); that limitation is stated
-everywhere rather than glossed over.
+**Test count: 606 → 704 (+98), 9 → 15 files, 0 deleted.** Typecheck and build pass, and all 42 browser
+tests pass in CI. They cannot run in the development sandbox (Chromium download is blocked), which is
+stated everywhere rather than glossed over.
 
 ---
 
@@ -321,22 +321,19 @@ Each entry: original problem → solution → files → tests → actual verific
 - **Solution.** Two jobs on `ubuntu-24.04`: `verify` (typecheck → unit → build → assertion that the
   built manifest still requests only `storage` with no host permissions → artifact upload → job
   summary) and `e2e` (needs `verify`, caches `~/.cache/ms-playwright` keyed on the lockfile, installs
-  Chromium with deps, runs `npm run test:e2e`, uploads `test-results/` + `playwright-report/` on
-  failure). Workflow-level `permissions: contents: read`, `concurrency` with cancel-in-progress,
-  `workflow_dispatch`, and all four third-party actions pinned to resolved commit SHAs with the
-  version in a comment. `playwright.config.ts` now records a trace and a screenshot on failure and
-  writes an HTML report, retries once in CI only, and forbids `test.only`.
+  Chromium with deps, runs `npm run test:e2e`, publishes failures as check annotations and a PR
+  comment, uploads traces/screenshots/HTML report on failure). Workflow-level
+  `permissions: contents: read`, `concurrency` with cancel-in-progress, `workflow_dispatch`, and all
+  four third-party actions pinned to commit SHAs of the Node 24 majors.
 - **Files.** `.github/workflows/ci.yml`, `playwright.config.ts`.
-- **Verification.** YAML parsed locally (2 jobs, 9 + 8 steps); all four action SHAs confirmed through
-  the GitHub API to be real commits *and* identical to the current `v4` tag of each action; the six
-  `run:` steps of the `verify` job were then executed locally in workflow order from the YAML
-  definition — `npm ci` (lockfile reproducible, 0 vulnerabilities), typecheck, 701 unit tests, build,
-  manifest assertion (`{"permissions":["storage"],"host_permissions":[]}`), job summary — all passing.
-- **Still not executed.** The `e2e` job. Three independent browser-download routes are blocked from
-  this sandbox (Playwright CDN, GitHub release assets, and the only npm-shipped Chromium is a
-  headless *shell* that cannot load extensions), and GitHub Actions cannot be started from here.
-  The next push/PR is the first real run.
-
+- **Verification.** [Run 42561937603](https://github.com/ujjwalmaurya890-ops/night-lens/actions/runs/42561937603):
+  **both jobs `success`**, zero annotations. `verify` 28 s, `e2e` 1 m 42 s, **42/42 browser tests
+  passing** in real Chromium with the unpacked extension. Before the pipeline could run, its `run:`
+  steps were replayed locally in workflow order, and all four action SHAs were confirmed through the
+  API to be real commits equal to each action's tag.
+- **What execution bought.** Getting the suite to run found three test defects and one product bug;
+  see [TEST_REPORT.md](TEST_REPORT.md#browser-e2e-executed-in-ci). The product bug — the install seed
+  discarding concurrently written settings — could not have been found any other way.
 ### 20 — Professional open-source documentation
 
 - **Problem.** No `CHANGELOG.md`, no `SECURITY.md`, no `docs/PRIVACY.md`, no `docs/DEVELOPMENT.md`, no
@@ -374,9 +371,9 @@ Each entry: original problem → solution → files → tests → actual verific
 | **Security** — diagnostics | Full settings broadcast | Counters + preset only | `security.test.ts` |
 | **Security** — permissions | `storage` only | `storage` only, now asserted on the built bundle in CI | `privacy.test.ts`, CI step |
 | **Privacy** — invariants | Prose only | 11 automated invariants | `privacy.test.ts` |
-| **Testing** | 606 tests / 9 files | **701 tests / 15 files** | `npm test` |
-| **Testing** — browser | 41 Playwright tests | **42**, including the new override/preset path | `npx playwright test --list`; execution pending CI |
-| **DX** | Single CI job, floating tags | Two jobs, pinned SHAs, caching, manifest check, summaries | `.github/workflows/ci.yml` |
+| **Testing** | 606 tests / 9 files | **704 tests / 15 files** | `npm test` |
+| **Testing** — browser | 41 Playwright tests, never executed | **42**, all passing in CI | [run 42561937603](https://github.com/ujjwalmaurya890-ops/night-lens/actions/runs/42561937603) |
+| **DX** | Single CI job, floating tags | Two jobs, SHA-pinned Node 24 actions, caching, manifest check, readable failures, summaries | `.github/workflows/ci.yml` |
 | **Docs** | 9 docs | 15 docs + root `SECURITY.md`/`CHANGELOG.md` | repository tree |
 
 **No numerical improvement is claimed that was not measured.** Where only a structural improvement
@@ -386,35 +383,27 @@ was possible (workflow execution, browser behaviour), the report says so.
 
 ## D. Git summary
 
-- **Branch:** `arena/bfb506ae-night-lens` (branched from `47fd171`, never pushed to `main`).
-- **Commits created (3, oldest first):**
-
-  | Commit | Subject |
-  |---|---|
-  | `40029ac` | `feat(engine): harden dynamic detection, colour parsing, native-dark heuristics and lifecycle` |
-  | `d55d9a7` | `feat(ui): purpose presets, live token preview, per-site override editor and sidebar a11y` |
-  | `f2d3851` | `fix(reliability): survive extension-context loss, validate messages and bound stored maps` |
-  | *this report* | `ci: pin actions, split jobs and document the engineering pass` — the commit that adds this file; its hash cannot be printed inside itself, see `git log` |
-
-- **Changed files at the time of writing:** 41 files, +2,480 / −198 lines across the three commits
-  above (source, tests, workflow, docs; plus rebuilt `dist/` assets, which this repository tracks).
-- **Untracked/uncommitted at the time of writing:** the fourth commit's contents
-  (`CHANGELOG.md`, `SECURITY.md`, `docs/DEVELOPMENT.md`, `docs/FINAL_ENGINEERING_REPORT.md`, the
-  tracker/audit/test-report updates, README/CONTRIBUTING/ARCHITECTURE/LIMITATIONS updates, the CI
-  workflow, and one new E2E test).
-- **Push status:** **not pushed.** The brief explicitly requires permission before pushing; the
-  branch is local and ready. No pull request was opened, and nothing was merged.
-- **History integrity:** no commit dates were changed, no existing commit was rewritten, no artificial
-  commits were added (each commit corresponds to one milestone that was typechecked, unit-tested and
-  built before committing).
-
----
+- **Branch:** `arena/bfb506ae-night-lens`, pushed to `origin`; pull request
+  [#5](https://github.com/ujjwalmaurya890-ops/night-lens/pull/5) opened against `main` after explicit
+  permission. Nothing was pushed to `main` and nothing was merged.
+- **Commits (oldest first):** milestone commits `40029ac`, `d55d9a7`, `f2d3851`, then the CI/docs
+  commits, the browser-suite fixes, the `ensureSettings` product fix, and the final documentation
+  pass — see `git log 47fd171..HEAD`.
+- **Size:** 54 files, +3,793 / −299 at the time of writing — source, tests, workflow and docs, plus the
+  rebuilt `dist/` assets this repository tracks. The documentation commit itself shifts these numbers
+  slightly, which is why they are quoted as a snapshot rather than an invariant.
+- **History integrity:** no commit dates were changed, no existing commit was rewritten, and every
+  commit corresponds to a step that was typechecked and unit-tested before it was made. The CI
+  iterations are real failing runs kept in history rather than squashed away.
+- **Verification trail:** six GitHub Actions runs. The first five are red and each one is the reason
+  for a fix; [run 42561937603](https://github.com/ujjwalmaurya890-ops/night-lens/actions/runs/42561937603)
+  is green on both jobs with zero annotations.
 
 ## E. Remaining limitations
 
-1. **Browser verification is pending.** Chromium could not be installed here (`cdn.playwright.dev`
-   unreachable, no system browser). The 42 Playwright tests — including the new preset/override test —
-   are unexecuted. CI will run them; until then, no browser-level claim is made.
+1. **The browser suite is CI-only.** Chromium cannot be downloaded in the development sandbox, so the
+   42 Playwright tests run on GitHub Actions rather than locally. They pass there; nobody has run them
+   on macOS, Windows or a real user's Chrome profile.
 2. **Closed shadow roots are unreachable.** Documented; not worked around, because the only workaround
    (patching `Element.prototype.attachShadow`) affects every page.
 3. **Late `attachShadow()` without a surrounding mutation** is themed on the next rescan rather than

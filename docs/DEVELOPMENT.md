@@ -126,6 +126,22 @@ When CI does fail, the `e2e` job uploads `test-results/` (traces, failure screen
 page screenshots the spec writes) and `playwright-report/` (browsable HTML). Traces are recorded on
 failure only; the suite retries once in CI and `test.only` is rejected there.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`:
+
+| Job | What it does |
+|---|---|
+| `verify` | `npm ci` → typecheck → 704 unit tests → build → assert the built manifest still asks only for `storage` with no host permissions → upload `dist/`. ~30 s. |
+| `e2e` | needs `verify`; caches `~/.cache/ms-playwright`, installs Chromium with deps, runs the 42 Playwright tests against the built extension in `dist/`. ~1 min 45 s. |
+
+Third-party actions are pinned to commit SHAs (with the version in a comment), the workflow holds
+`contents: read`, and the `e2e` job additionally gets `pull-requests: write` for one purpose: when the
+browser tests fail, it comments the last 200 lines of Playwright output on the pull request and emits
+up to five check annotations. Traces, failure screenshots, the HTML report and the raw output are
+uploaded as artifacts. That exists because restricted networks often cannot download log bundles —
+the annotations and the comment are the fallback.
+
 ## Debugging
 
 - Set **Developer mode** in Settings → Performance to log engine counters to the page console.

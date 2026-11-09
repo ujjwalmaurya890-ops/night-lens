@@ -47,6 +47,16 @@ Every entry below is implemented and covered by the tests listed in
 
 ### Fixed
 
+- **The install seed could discard settings written at the same moment.** `chrome.runtime.onInstalled`
+  read storage, and if it was empty it wrote defaults unconditionally — a write that landed between
+  the read and the write was lost. The new browser suite caught a page loading defaults while per-site
+  rules were stored. Defaults are now seeded only when the key is still absent, inside the extension's
+  write queue, so it is atomic with respect to every other writer.
+- **The browser suite now actually runs.** Its first execution found three test defects as well: the
+  harness seeded `schemaVersion: 1` (exercising the legacy migration in every test), `getByLabel('Theme')`
+  became ambiguous once the preset row added `aria-label="Favorite themes"`, and the popup tab-order test
+  hardcoded the pre-redesign control list.
+
 - Forced layout reads (`getBoundingClientRect`) are no longer issued for ordinary elements;
   geometry is only measured for canvas/SVG plates.
 - Removing a shadow-DOM host while NightLens is active strips the generated attributes inside its
