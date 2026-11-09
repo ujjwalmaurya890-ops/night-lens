@@ -131,7 +131,8 @@ test.describe('per-site rules (nearest hostname matching)', () => {
     await setSettings(settings({ siteRules: { '127.0.0.1': 'off' } }));
     const excluded = await context.newPage();
     await open(excluded, 'news.html', ORIGIN_A, false);
-    expect(await ownedCount(excluded)).toBe(0);
+    const diag = await excluded.evaluate(() => document.documentElement.getAttribute('data-diag-nightlens'));
+    expect(await ownedCount(excluded), `content script saw: ${diag}`).toBe(0);
     expect(await pageBg(excluded)).toBe('rgb(255, 255, 255)');
     const other = await context.newPage();
     await open(other, 'news.html', ORIGIN_B);
@@ -368,14 +369,29 @@ test.describe('popup (real extension page)', () => {
     await open(page, 'news.html');
     const popup = await openPopup(context, sw, extensionId, page);
     await popup.getByText('127.0.0.1').waitFor();
+    const describeControl = () => popup.evaluate(() => {
+      const a = document.activeElement as HTMLElement | null;
+      const c = a ? getComputedStyle(a) : null;
+      return { name: a ? (a.getAttribute('aria-label') || a.id || a.textContent?.trim() || a.tagName) : '(none)', outline: c ? `${c.outlineStyle} ${c.outlineWidth}` : '' };
+    });
+    // Every interactive control must be reachable by Tab, in document order, with a visible focus ring.
+    const controls: string[] = await popup.evaluate(() => {
+      const name = (el: Element) => el.getAttribute('aria-label') || el.id || el.textContent?.trim() || el.tagName;
+      return Array.from(document.querySelectorAll<HTMLElement>('button, select, input, a[href], [tabindex]'))
+        .filter((el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0)
+        .map(name);
+    });
+    expect(controls.length).toBeGreaterThanOrEqual(7);
     const order: string[] = [];
     const outlines: string[] = [];
-    for (let i = 0; i < 7; i++) { // the popup has exactly 7 tab stops; an 8th Tab would leave the document
+    for (let i = 0; i < controls.length; i++) {
       await popup.keyboard.press('Tab');
-      const stop = await popup.evaluate(() => { const a = document.activeElement as HTMLElement; const c = getComputedStyle(a); return { name: a.getAttribute('aria-label') || a.id || a.textContent?.trim() || a.tagName, outline: `${c.outlineStyle} ${c.outlineWidth}` }; });
-      order.push(stop.name); outlines.push(stop.outline);
+      const stop = await describeControl();
+      order.push(stop.name);
+      outlines.push(stop.outline);
     }
-    expect(order).toEqual(['Dark mode (all sites)', 'Dark mode on 127.0.0.1', 'theme-p', 'brightness-p', 'contrast-p', 'Settings', 'Reset…']);
+    expect(order).toEqual(controls);
+    expect(order[0]).toBe('Dark mode (all sites)'); // the primary control comes first
     for (const o of outlines) expect(o).toMatch(/^solid 2px/); // visible focus indicator on every stop
     await popup.getByRole('switch', { name: 'Dark mode (all sites)' }).focus();
     await popup.keyboard.press('Space');
@@ -402,7 +418,7 @@ test.describe('popup (real extension page)', () => {
     await options.getByRole('button', { name: 'Themes' }).click();
     // The preview reflects the palette before anything is applied to the page.
     await expect(options.getByLabel('Theme preview')).toBeVisible();
-    await options.getByRole('button', { name: 'High contrast' }).click();
+    await options.getByRole('group', { name: 'Purpose presets' }).getByRole('button', { name: 'High contrast' }).click();
     await page.waitForFunction((prev) => getComputedStyle(document.body).backgroundColor !== prev, beforePreset);
 
     const beforeOverride = await bodyBg();

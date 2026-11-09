@@ -71,7 +71,7 @@ export async function open(page: Page, path: string, origin = ORIGIN_A, expectTh
   else {
     await page.waitForTimeout(600);
     // A page that should stay untouched is the interesting case: report what the content script saw.
-    const diag = await page.evaluate(() => document.documentElement.getAttribute('data-nl-diag'));
+    const diag = await page.evaluate(() => document.documentElement.getAttribute('data-diag-nightlens'));
     console.log(`[e2e] ${path} should be untouched; content script saw: ${diag ?? '(no diagnosis attribute)'}`);
   }
 }
