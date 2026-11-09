@@ -131,12 +131,7 @@ test.describe('per-site rules (nearest hostname matching)', () => {
     await setSettings(settings({ siteRules: { '127.0.0.1': 'off' } }));
     const excluded = await context.newPage();
     await open(excluded, 'news.html', ORIGIN_A, false);
-    const diag = await excluded.evaluate(() => ({
-      decision: document.documentElement.getAttribute('data-diag-nightlens'),
-      raw: document.documentElement.getAttribute('data-diag-raw'),
-      load: document.documentElement.getAttribute('data-diag-load'),
-    }));
-    expect(await ownedCount(excluded), `content script saw: ${JSON.stringify(diag)}`).toBe(0);
+    expect(await ownedCount(excluded), 'an excluded site must not receive any NightLens stylesheet').toBe(0);
     expect(await pageBg(excluded)).toBe('rgb(255, 255, 255)');
     const other = await context.newPage();
     await open(other, 'news.html', ORIGIN_B);

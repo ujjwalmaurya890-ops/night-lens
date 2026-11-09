@@ -88,12 +88,7 @@ export const settings = (over: Record<string, unknown> = {}) => ({ schemaVersion
 export async function open(page: Page, path: string, origin = ORIGIN_A, expectThemed = true): Promise<void> {
   await page.goto(`${origin}/${path}`);
   if (expectThemed) await waitThemed(page);
-  else {
-    await page.waitForTimeout(600);
-    // A page that should stay untouched is the interesting case: report what the content script saw.
-    const diag = await page.evaluate(() => document.documentElement.getAttribute('data-diag-nightlens'));
-    console.log(`[e2e] ${path} should be untouched; content script saw: ${diag ?? '(no diagnosis attribute)'}`);
-  }
+  else await page.waitForTimeout(600);
 }
 export async function waitThemed(page: Page | Frame): Promise<void> {
   await page.waitForFunction(() => document.querySelector('style[data-nl-owned]') !== null && document.querySelector('[data-nl-bg],[data-nl-fg]') !== null, undefined, { timeout: 8000 });
