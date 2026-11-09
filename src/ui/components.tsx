@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { LIMITS } from '../shared/defaults';
 import { PREMIUM_THEME_META, PRESETS, themePreviewColors } from '../engine/palette';
-import { THEME_IDS, type Settings, type ThemeId } from '../shared/types';
+import { PREMIUM_THEME_IDS, THEME_IDS, type Settings, type ThemeId } from '../shared/types';
 import { IconAlertTriangle, IconCheck, IconCheckCircle } from './icons';
 
 export const THEME_LABELS: Record<string, string> = (() => {
@@ -298,20 +298,8 @@ export function ThemeGrid({
   value: ThemeId;
   onChange: (v: ThemeId) => void;
 }) {
-  const premium = THEME_IDS.filter((t) =>
-    [
-      'midnight',
-      'deepSpace',
-      'amoled',
-      'softDark',
-      'charcoal',
-      'graphite',
-      'solarized',
-      'nord',
-      'dracula',
-      'oledNight',
-    ].includes(t),
-  );
+  // Derived from the single source of truth so a new premium palette cannot be forgotten here.
+  const premium: ThemeId[] = [...PREMIUM_THEME_IDS];
   const essentials: ThemeId[] = ['balanced', 'highContrast', 'dim', 'system', 'custom'];
 
   return (
@@ -348,14 +336,12 @@ export function AppearanceControls({
   settings,
   onChange,
   showSepia,
-  compact: _compact,
   compactThemeOnly,
   slidersOnly,
 }: {
   settings: Settings;
   onChange: (u: (s: Settings) => Settings, msg: string) => void;
   showSepia?: boolean;
-  compact?: boolean;
   compactThemeOnly?: boolean;
   slidersOnly?: boolean;
 }) {
@@ -719,5 +705,20 @@ export function IconWrapper({
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * Shared empty state for lists that can legitimately have no rows. Keeps the visual language
+ * consistent across the Websites, Themes and Overview tabs and always renders real text for
+ * screen readers instead of an icon-only box.
+ */
+export function EmptyState({ icon, title, description }: { icon?: ReactNode; title: string; description?: ReactNode }) {
+  return (
+    <div className="empty-state" role="status">
+      {icon}
+      <span className="empty-state-title">{title}</span>
+      {description && <span className="field-hint">{description}</span>}
+    </div>
   );
 }

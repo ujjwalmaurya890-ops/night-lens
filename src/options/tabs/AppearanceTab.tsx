@@ -9,7 +9,8 @@ import {
   Slider,
   Switch,
 } from '../../ui/components';
-import { IconBook, IconPalette, IconSliders } from '../../ui/icons';
+import { IconBook, IconEye, IconPalette, IconSliders } from '../../ui/icons';
+import { ThemePreview } from '../../ui/ThemePreview';
 
 interface AppearanceTabProps {
   settings: Settings;
@@ -26,6 +27,14 @@ export function AppearanceTab({ settings, onChange }: AppearanceTabProps) {
           Adjustments take effect immediately.
         </p>
       </div>
+
+      <SectionCard
+        icon={<IconEye size={15} />}
+        title="Live Preview"
+        description="Exactly the colours the content script will apply, recomputed as you change settings. Nothing on your websites changes until a setting is saved."
+      >
+        <ThemePreview settings={settings} />
+      </SectionCard>
 
       <SectionCard
         icon={<IconSliders size={15} />}

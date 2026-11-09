@@ -7,7 +7,8 @@ import {
   type Settings,
   type ThemeId,
 } from '../../shared/types';
-import { SectionCard, THEME_LABELS } from '../../ui/components';
+import { EmptyState, SectionCard, THEME_LABELS } from '../../ui/components';
+import { SiteOverrideEditor } from './SiteOverrideEditor';
 import type { Notice } from '../../ui/hooks';
 import {
   IconClose,
@@ -156,9 +157,13 @@ export function WebsitesTab({
             Add to excluded
           </button>
         </form>
-        <div id="exclude-error" className="status error" role="alert">
-          {inputError}
-        </div>
+        {/* Rendered only when there is something to announce: an always-present empty
+            role="alert" region is noise for screen readers. */}
+        {inputError ? (
+          <div id="exclude-error" className="status error" role="alert">
+            {inputError}
+          </div>
+        ) : null}
 
         <hr className="divider" />
 
@@ -194,9 +199,13 @@ export function WebsitesTab({
             Apply rule
           </button>
         </form>
-        <div id="rule-error" className="status error" role="alert">
-          {ruleError}
-        </div>
+        {/* Rendered only when there is something to announce: an always-present empty
+            role="alert" region is noise for screen readers. */}
+        {ruleError ? (
+          <div id="rule-error" className="status error" role="alert">
+            {ruleError}
+          </div>
+        ) : null}
 
         <hr className="divider" />
 
@@ -235,9 +244,13 @@ export function WebsitesTab({
             Assign
           </button>
         </form>
-        <div id="theme-error" className="status error" role="alert">
-          {themeError}
-        </div>
+        {/* Rendered only when there is something to announce: an always-present empty
+            role="alert" region is noise for screen readers. */}
+        {themeError ? (
+          <div id="theme-error" className="status error" role="alert">
+            {themeError}
+          </div>
+        ) : null}
 
         {siteThemes.length > 0 && (
           <ul className="sites" aria-label="Per-site themes">
@@ -305,14 +318,15 @@ export function WebsitesTab({
             <span className="badge badge-off">{excluded.length}</span>
           </div>
           {filteredExcluded.length === 0 ? (
-            <div className="empty-state">
-              <IconShield size={14} />
-              <span>
-                {excluded.length === 0
-                  ? 'No excluded sites. Use the toolbar popup or the form above.'
-                  : 'No matching excluded sites.'}
-              </span>
-            </div>
+            <EmptyState
+              icon={<IconShield size={14} />}
+              title={excluded.length === 0 ? 'No excluded sites' : 'No matching excluded sites'}
+              description={
+                excluded.length === 0
+                  ? 'Use the toolbar popup or the form above to exclude a website.'
+                  : 'Try a different search term.'
+              }
+            />
           ) : (
             <ul className="sites" aria-label="Excluded sites">
               {filteredExcluded.map((h) => (
@@ -338,14 +352,15 @@ export function WebsitesTab({
             <span className="badge badge-active">{forced.length}</span>
           </div>
           {filteredForced.length === 0 ? (
-            <div className="empty-state">
-              <IconSparkles size={14} />
-              <span>
-                {forced.length === 0
-                  ? 'None. Sites that already look dark are left alone unless forced on.'
-                  : 'No matching forced sites.'}
-              </span>
-            </div>
+            <EmptyState
+              icon={<IconSparkles size={14} />}
+              title={forced.length === 0 ? 'No forced sites' : 'No matching forced sites'}
+              description={
+                forced.length === 0
+                  ? 'Sites that already look dark are left alone unless forced on.'
+                  : 'Try a different search term.'
+              }
+            />
           ) : (
             <ul className="sites" aria-label="Forced sites">
               {filteredForced.map((h) => (
@@ -405,9 +420,13 @@ export function WebsitesTab({
             Save profile
           </button>
         </form>
-        <div id="comp-error" className="status error" role="alert">
-          {compError}
-        </div>
+        {/* Rendered only when there is something to announce: an always-present empty
+            role="alert" region is noise for screen readers. */}
+        {compError ? (
+          <div id="comp-error" className="status error" role="alert">
+            {compError}
+          </div>
+        ) : null}
         {Object.keys(settings.compatibility).length === 0 ? (
           <div className="empty-state">
             <IconLayers size={14} />
@@ -544,15 +563,18 @@ export function WebsitesTab({
         )}
       </SectionCard>
 
+      <SiteOverrideEditor settings={settings} onChange={onChange} onSetNotice={onSetNotice} />
+
       <SectionCard
-        title="Per-Website Overrides"
-        description="Domain-specific brightness, contrast, and warmth overrides layered atop your global configuration."
+        title="Saved Overrides"
+        description="Overrides currently stored. Clearing one falls back to your global appearance settings."
       >
         {Object.keys(settings.siteOverrides).length === 0 ? (
-          <div className="empty-state">
-            <IconSliders size={14} />
-            <span>No domain overrides configured.</span>
-          </div>
+          <EmptyState
+            icon={<IconSliders size={14} />}
+            title="No domain overrides configured"
+            description="Use the form above to give one website its own theme or calibration."
+          />
         ) : (
           <ul className="sites">
             {Object.entries(settings.siteOverrides).map(([host, ov]) => (
