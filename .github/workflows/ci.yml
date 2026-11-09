@@ -85,6 +85,11 @@ jobs:
     name: Browser tests (Chromium + extension)
     needs: verify
     runs-on: ubuntu-24.04
+    # Job-level elevation, for one purpose: posting the failure output as a PR comment.
+    # The workflow as a whole stays read-only; the built extension requests nothing extra.
+    permissions:
+      contents: read
+      pull-requests: write
     # 42 tests x 45s timeout x 1 retry is the worst case; the budget leaves room for the install.
     timeout-minutes: 45
     steps:
@@ -114,8 +119,12 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # The extension under test is built from the same commit the unit job verified.
+      # Output is kept so the failure can be published below even where log download is blocked.
       - name: Build and run Playwright suite
-        run: npm run test:e2e
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee playwright-output.txt
 
       # Keep the evidence for a suite that has never run in CI: traces, screenshots and the report.
       - name: Upload Playwright results
@@ -124,10 +133,36 @@ jobs:
         with:
           name: playwright-results
           path: |
-            test-results/
+            playwright-output.txt
             playwright-report/
+            test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+      # Surface the failure in two places that survive restricted networks: a check annotation
+      # (readable through the checks API) and, on pull requests, a comment with the full output.
+      - name: Publish failure details
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ ! -f playwright-output.txt ]; then echo "no captured output"; exit 0; fi
+          python3 - <<'ANN'
+          import re
+          text = open('playwright-output.txt', encoding='utf-8', errors='replace').read()
+          blocks = re.split(r'\n\s+(?=\d+\) )', text)
+          failures = [b.strip() for b in blocks if re.match(r'\d+\) ', b.strip())]
+          for block in failures[:5]:
+              message = block[:900].replace('%', '%25').replace('\r', '').replace('\n', ' ')
+              print(f"::error title=Playwright failure::{message}")
+          print(f"captured {len(failures)} failure block(s) as annotations")
+          ANN
+          if [ -n "$PR_NUMBER" ]; then
+            { echo "### Playwright failure output"; echo '```'; tail -n 200 playwright-output.txt; echo '```'; } > failure-comment.md
+            gh pr comment "$PR_NUMBER" --body-file failure-comment.md || echo "could not comment (non-fatal)"
+          fi
 
       - name: Summary
         if: always()
@@ -137,5 +172,6 @@ jobs:
             echo ""
             echo "Result: ${{ job.status }}"
             echo ""
-            echo "Playwright artifacts are uploaded when the job fails."
+            echo "Failure output is published as a check annotation and, on pull requests, as a comment."
+            echo "Artifacts (traces, screenshots, HTML report) are uploaded when the job fails."
           } >> "$GITHUB_STEP_SUMMARY"
