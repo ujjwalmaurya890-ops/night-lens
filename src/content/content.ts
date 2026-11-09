@@ -82,6 +82,11 @@ export function startContentScript(): () => void {
     const effective = getEffectiveSettings(settings, hostname);
     const decision = decide(effective, hostname, darkQuery.matches);
     siteMode = decision.siteMode;
+    // TEMP-DIAG: remove after the first browser run; records why the engine did or did not run.
+    document.documentElement.setAttribute('data-nl-diag', JSON.stringify({
+      host: hostname, theme: effective.theme, rules: settings.siteRules, dark: darkQuery.matches,
+      active: decision.active, status: decision.active ? 'active' : decision.status, loaded,
+    }));
 
     if (!decision.active) {
       engine.stop();

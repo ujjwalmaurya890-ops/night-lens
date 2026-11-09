@@ -62,13 +62,18 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
 });
 export { expect };
 
-export const settings = (over: Record<string, unknown> = {}) => ({ schemaVersion: 1, enabled: true, theme: 'balanced', brightness: 100, contrast: 100, sepia: 0, siteRules: {}, ...over });
+export const settings = (over: Record<string, unknown> = {}) => ({ schemaVersion: 2, enabled: true, theme: 'balanced', brightness: 100, contrast: 100, sepia: 0, siteRules: {}, ...over });
 
 /** Opens a fixture and waits until NightLens has finished its first pass (or timed out as "not themed"). */
 export async function open(page: Page, path: string, origin = ORIGIN_A, expectThemed = true): Promise<void> {
   await page.goto(`${origin}/${path}`);
   if (expectThemed) await waitThemed(page);
-  else await page.waitForTimeout(600);
+  else {
+    await page.waitForTimeout(600);
+    // A page that should stay untouched is the interesting case: report what the content script saw.
+    const diag = await page.evaluate(() => document.documentElement.getAttribute('data-nl-diag'));
+    console.log(`[e2e] ${path} should be untouched; content script saw: ${diag ?? '(no diagnosis attribute)'}`);
+  }
 }
 export async function waitThemed(page: Page | Frame): Promise<void> {
   await page.waitForFunction(() => document.querySelector('style[data-nl-owned]') !== null && document.querySelector('[data-nl-bg],[data-nl-fg]') !== null, undefined, { timeout: 8000 });

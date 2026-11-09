@@ -352,14 +352,14 @@ test.describe('popup (real extension page)', () => {
     const page = await context.newPage();
     await open(page, 'docs.html');
     const popup = await openPopup(context, sw, extensionId, page);
-    await popup.getByLabel('Theme').selectOption('dim');
+    await popup.getByLabel('Theme', { exact: true }).selectOption('dim');
     await page.waitForFunction(() => getComputedStyle(document.querySelector('pre')!).backgroundColor !== '' && document.querySelector('style[data-nl-owned]')!.textContent!.includes('--nl-bg:#2'));
     await popup.getByRole('switch', { name: 'Dark mode (all sites)' }).click();
     await page.waitForFunction(() => document.querySelector('style[data-nl-owned]') === null);
     await popup.getByRole('button', { name: 'Reset…' }).click();
     await popup.getByRole('group', { name: 'Confirm reset' }).getByRole('button', { name: 'Reset' }).click();
     await waitThemed(page);
-    await expect(popup.getByLabel('Theme')).toHaveValue('midnight');
+    await expect(popup.getByLabel('Theme', { exact: true })).toHaveValue('midnight');
   });
 
   test('keyboard: Tab reaches every control in a sensible order and Space toggles a switch', async ({ context, sw, extensionId, setSettings }) => {
@@ -450,7 +450,7 @@ test.describe('error hygiene', () => {
     const popup = await context.newPage();
     watch(popup, 'popup');
     await popup.goto(`chrome-extension://${extensionId}/popup/index.html?tab=${popupTab}`);
-    await popup.getByLabel('Theme').selectOption('highContrast');
+    await popup.getByLabel('Theme', { exact: true }).selectOption('highContrast');
     await popup.getByRole('switch', { name: 'Dark mode (all sites)' }).click();
     await popup.getByRole('switch', { name: 'Dark mode (all sites)' }).click();
     const options = await context.newPage();
