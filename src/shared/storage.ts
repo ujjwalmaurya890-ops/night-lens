@@ -298,6 +298,23 @@ export function updateSettings(updater: (current: Settings) => Settings): Promis
   });
 }
 
+/**
+ * Seeds defaults only when the key is absent, with the check and the write serialised against
+ * every other writer. `chrome.runtime.onInstalled` fires on a fresh profile while other surfaces
+ * may already be writing; an unconditional reset there would discard those writes (and, in the
+ * browser suite, silently reverted per-site rules the test had just stored).
+ */
+export function ensureSettings(): Promise<Settings> {
+  return enqueueWrite(async () => {
+    if (!isExtensionContextValid()) throw new Error(STALE_CONTEXT_ERROR);
+    const existing = (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY];
+    if (existing !== undefined) return sanitizeSettings(existing);
+    const next = cloneDefaults();
+    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    return next;
+  });
+}
+
 export function resetSettings(): Promise<Settings> {
   return enqueueWrite(async () => {
     if (!isExtensionContextValid()) throw new Error(STALE_CONTEXT_ERROR);

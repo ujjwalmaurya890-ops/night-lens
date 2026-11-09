@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { handleMessage } from '../../src/background/handlers';
+import { handleInstalled, handleMessage } from '../../src/background/handlers';
 import { startContentScript } from '../../src/content/content';
 import {
   DEBUG_INFO, GET_DEBUG, GET_STATUS, GET_STORAGE, EXPORT_SETTINGS, STATUS_CHANGED,
@@ -91,6 +91,30 @@ describe('service worker handler (contribution 16)', () => {
     expect(JSON.parse(reply.data)).toMatchObject({ schemaVersion: 2 });
     await expect(handleMessage({ type: 'nightlens/steal' }, asSender() as chrome.runtime.MessageSender)).resolves.toBeNull();
     await expect(handleMessage(null, asSender() as chrome.runtime.MessageSender)).resolves.toBeNull();
+  });
+});
+
+describe('the install seed never clobbers existing settings (found by the first browser run)', () => {
+  it('keeps settings that already exist instead of rewriting defaults', async () => {
+    mock = installChromeMock();
+    mock.data[STORAGE_KEY] = { ...cloneDefaults(), theme: 'dim', siteRules: { '127.0.0.1': 'off' } };
+    await handleInstalled();
+    expect(mock.data[STORAGE_KEY]).toMatchObject({ theme: 'dim', siteRules: { '127.0.0.1': 'off' } });
+  });
+
+  it('seeds defaults only when nothing is stored yet', async () => {
+    mock = installChromeMock();
+    expect(mock.data[STORAGE_KEY]).toBeUndefined();
+    await handleInstalled();
+    expect(mock.data[STORAGE_KEY]).toMatchObject({ schemaVersion: 2, enabled: true });
+  });
+
+  it('does not lose a write that lands while the install seed runs', async () => {
+    mock = installChromeMock();
+    const userWrite = updateSettings((s) => ({ ...s, theme: 'dim' }));
+    const installSeed = handleInstalled();
+    await Promise.all([userWrite, installSeed]);
+    expect((mock.data[STORAGE_KEY] as Settings).theme).toBe('dim');
   });
 });
 

@@ -1,6 +1,6 @@
 import { STORAGE_KEY } from '../shared/defaults';
 import { isExportSettingsMessage, isGetStorageMessage } from '../shared/messages';
-import { exportSettings, loadSettings, resetSettings, updateSettings } from '../shared/storage';
+import { ensureSettings, exportSettings, loadSettings, updateSettings } from '../shared/storage';
 import type { Settings } from '../shared/types';
 
 export const TOGGLE_COMMAND = 'toggle-nightlens';
@@ -23,9 +23,8 @@ export async function handleCommand(command: string): Promise<void> {
 }
 
 export async function handleInstalled(): Promise<void> {
-  const stored = await chrome.storage.local.get(STORAGE_KEY);
-  const settings = stored[STORAGE_KEY] === undefined ? await resetSettings() : await loadSettings();
-  await updateBadge(settings);
+  // Read-then-write is atomic here: anything written by another surface in between is kept.
+  await updateBadge(await ensureSettings());
 }
 
 export async function handleStartup(): Promise<void> {
