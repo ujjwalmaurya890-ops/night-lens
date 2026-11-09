@@ -50,7 +50,16 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
       for (let attempt = 0; ; attempt++) {
         try {
           await sw.evaluate(([k, v]) => chrome.storage.local.set({ [k as string]: v }), [STORAGE_KEY, s] as const);
-          return;
+          // Confirm the write is readable from the storage the pages will read, not just that set() resolved.
+          for (let check = 0; check < 20; check++) {
+            const stored = await sw.evaluate(([k]) => chrome.storage.local.get(k as string), [STORAGE_KEY] as const);
+            const got = stored[STORAGE_KEY] as { theme?: unknown; siteRules?: unknown } | undefined;
+            const want = s as { theme?: unknown; siteRules?: unknown };
+            if (got && JSON.stringify(got.theme) === JSON.stringify(want.theme ?? got.theme)
+              && JSON.stringify(got.siteRules ?? {}) === JSON.stringify(want.siteRules ?? {})) return;
+            await new Promise((r) => setTimeout(r, 100));
+          }
+          throw new Error('settings write was not readable after 2s');
         } catch (error) {
           const notReady = error instanceof Error && /reading 'local'/.test(error.message);
           if (!notReady || attempt >= 20) throw error;

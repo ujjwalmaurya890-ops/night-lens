@@ -8,6 +8,7 @@ import {
   type DebugInfoMessage, type StatusChangedMessage, type StatusPayload,
 } from '../shared/messages';
 import { isExtensionContextValid, loadSettings, subscribeToSettings } from '../shared/storage';
+import { STORAGE_KEY } from '../shared/defaults';
 import { cloneDefaults } from '../shared/defaults';
 import type { Settings, SiteStatus } from '../shared/types';
 
@@ -189,11 +190,25 @@ export function startContentScript(): () => void {
     w.__nightlensLoaded = false;
   }
 
+  // TEMP-DIAG: remove after diagnosis. Records what storage actually held when the script started.
+  void (async () => {
+    let raw: unknown;
+    let err: string | null = null;
+    try { raw = (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY]; } catch (e) { err = String(e); }
+    const r = raw as { theme?: unknown; siteRules?: unknown; schemaVersion?: unknown } | undefined;
+    document.documentElement.setAttribute('data-diag-raw', JSON.stringify({
+      ctxValid: isExtensionContextValid(),
+      raw: raw === undefined ? 'undefined' : { theme: r?.theme ?? null, rules: r?.siteRules ?? null, v: r?.schemaVersion ?? null },
+      err,
+    }));
+  })();
   void loadSettings().then((s) => {
     if (disposed) return;
     settings = s;
     loaded = true;
     apply();
+    // TEMP-DIAG: did the load itself return defaults?
+    document.documentElement.setAttribute('data-diag-load', JSON.stringify({ theme: s.theme, rules: Object.keys(s.siteRules) }));
   });
   darkQuery.addEventListener('change', apply);
   motionQuery.addEventListener('change', apply);

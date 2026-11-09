@@ -131,8 +131,12 @@ test.describe('per-site rules (nearest hostname matching)', () => {
     await setSettings(settings({ siteRules: { '127.0.0.1': 'off' } }));
     const excluded = await context.newPage();
     await open(excluded, 'news.html', ORIGIN_A, false);
-    const diag = await excluded.evaluate(() => document.documentElement.getAttribute('data-diag-nightlens'));
-    expect(await ownedCount(excluded), `content script saw: ${diag}`).toBe(0);
+    const diag = await excluded.evaluate(() => ({
+      decision: document.documentElement.getAttribute('data-diag-nightlens'),
+      raw: document.documentElement.getAttribute('data-diag-raw'),
+      load: document.documentElement.getAttribute('data-diag-load'),
+    }));
+    expect(await ownedCount(excluded), `content script saw: ${JSON.stringify(diag)}`).toBe(0);
     expect(await pageBg(excluded)).toBe('rgb(255, 255, 255)');
     const other = await context.newPage();
     await open(other, 'news.html', ORIGIN_B);
@@ -415,14 +419,14 @@ test.describe('popup (real extension page)', () => {
 
     const bodyBg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     const beforePreset = await bodyBg();
-    await options.getByRole('button', { name: 'Themes' }).click();
+    await options.getByRole('button', { name: 'Themes', exact: true }).click();
     // The preview reflects the palette before anything is applied to the page.
     await expect(options.getByLabel('Theme preview')).toBeVisible();
     await options.getByRole('group', { name: 'Purpose presets' }).getByRole('button', { name: 'High contrast' }).click();
     await page.waitForFunction((prev) => getComputedStyle(document.body).backgroundColor !== prev, beforePreset);
 
     const beforeOverride = await bodyBg();
-    await options.getByRole('button', { name: 'Websites' }).click();
+    await options.getByRole('button', { name: 'Websites', exact: true }).click();
     await options.getByLabel('Override website').fill('127.0.0.1');
     // Range inputs cannot be filled directly; set the value the way React expects to see it.
     await options.getByLabel('Override brightness').evaluate((el) => {
