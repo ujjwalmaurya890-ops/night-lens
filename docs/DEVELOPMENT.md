@@ -119,6 +119,13 @@ Rules of thumb:
 binary. If no browser is available at all, say so in the PR instead of claiming a pass — the CI job
 runs the suite on a network-enabled runner.
 
+Note that a Chromium *headless shell* (what some npm packages ship) is not a substitute: it cannot
+load an unpacked extension, so every test would fail at launch.
+
+When CI does fail, the `e2e` job uploads `test-results/` (traces, failure screenshots, the explicit
+page screenshots the spec writes) and `playwright-report/` (browsable HTML). Traces are recorded on
+failure only; the suite retries once in CI and `test.only` is rejected there.
+
 ## Debugging
 
 - Set **Developer mode** in Settings → Performance to log engine counters to the page console.

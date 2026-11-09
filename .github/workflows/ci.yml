@@ -85,7 +85,8 @@ jobs:
     name: Browser tests (Chromium + extension)
     needs: verify
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # 42 tests x 45s timeout x 1 retry is the worst case; the budget leaves room for the install.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -116,12 +117,15 @@ jobs:
       - name: Build and run Playwright suite
         run: npm run test:e2e
 
+      # Keep the evidence for a suite that has never run in CI: traces, screenshots and the report.
       - name: Upload Playwright results
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-results
-          path: test-results/
+          path: |
+            test-results/
+            playwright-report/
           if-no-files-found: ignore
           retention-days: 7
 

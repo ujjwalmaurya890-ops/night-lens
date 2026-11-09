@@ -56,6 +56,25 @@ files were additive (`color.test.ts`) and a one-line selector update in
   discovery is not execution.
 
 Therefore **no browser-level pass, screenshot, or live-site result is claimed for this change set.**
+
+### What *was* executed from the CI definition
+
+The `verify` job was replayed outside GitHub: its `run:` steps are extracted from
+`.github/workflows/ci.yml` and executed in order in the repository root, with `CI=true`.
+
+| CI step | Locally replayed | Result |
+|---|---|---|
+| `npm ci` | yes | pass — lockfile is reproducible, 0 vulnerabilities |
+| `npm run typecheck` | yes | pass (2.5 s) |
+| `npm test` | yes | pass (62 s) |
+| `npm run build` | yes | pass — `NightLens built to dist` |
+| built-manifest assertion (inline `node -e`) | yes | pass — `manifest OK: {"permissions":["storage"],"host_permissions":[]}` |
+| job summary (heredoc into `$GITHUB_STEP_SUMMARY`) | yes | pass — markdown table rendered |
+| `checkout`, `setup-node`, `upload-artifact`, `cache` | no — GitHub-only `uses:` steps | action SHAs verified against the GitHub API instead |
+
+All 42 Playwright tests remain **unexecuted**. The suite's config now records `trace` and screenshots
+on failure and writes an HTML report, so the first CI failure — if there is one — arrives with
+evidence attached rather than as a bare red X.
 `.github/workflows/ci.yml` runs the suite on `ubuntu-24.04` with `npx playwright install --with-deps
 chromium` in the `e2e` job. One new browser test was added
 (`options page: a purpose preset and a per-site override reach the live page`) and is unverified

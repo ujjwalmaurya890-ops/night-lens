@@ -321,13 +321,21 @@ Each entry: original problem → solution → files → tests → actual verific
 - **Solution.** Two jobs on `ubuntu-24.04`: `verify` (typecheck → unit → build → assertion that the
   built manifest still requests only `storage` with no host permissions → artifact upload → job
   summary) and `e2e` (needs `verify`, caches `~/.cache/ms-playwright` keyed on the lockfile, installs
-  Chromium with deps, runs `npm run test:e2e`, uploads `test-results/` on failure). Workflow-level
-  `permissions: contents: read`, `concurrency` with cancel-in-progress, `workflow_dispatch`, and all
-  four third-party actions pinned to resolved commit SHAs with the version in a comment.
-- **Files.** `.github/workflows/ci.yml`.
-- **Verification.** YAML parsed successfully locally (jobs/steps inspected); SHAs resolved through the
-  GitHub API. **Not executed** — GitHub Actions cannot run from this sandbox, so the first real run is
-  the next push/PR.
+  Chromium with deps, runs `npm run test:e2e`, uploads `test-results/` + `playwright-report/` on
+  failure). Workflow-level `permissions: contents: read`, `concurrency` with cancel-in-progress,
+  `workflow_dispatch`, and all four third-party actions pinned to resolved commit SHAs with the
+  version in a comment. `playwright.config.ts` now records a trace and a screenshot on failure and
+  writes an HTML report, retries once in CI only, and forbids `test.only`.
+- **Files.** `.github/workflows/ci.yml`, `playwright.config.ts`.
+- **Verification.** YAML parsed locally (2 jobs, 9 + 8 steps); all four action SHAs confirmed through
+  the GitHub API to be real commits *and* identical to the current `v4` tag of each action; the six
+  `run:` steps of the `verify` job were then executed locally in workflow order from the YAML
+  definition — `npm ci` (lockfile reproducible, 0 vulnerabilities), typecheck, 701 unit tests, build,
+  manifest assertion (`{"permissions":["storage"],"host_permissions":[]}`), job summary — all passing.
+- **Still not executed.** The `e2e` job. Three independent browser-download routes are blocked from
+  this sandbox (Playwright CDN, GitHub release assets, and the only npm-shipped Chromium is a
+  headless *shell* that cannot load extensions), and GitHub Actions cannot be started from here.
+  The next push/PR is the first real run.
 
 ### 20 — Professional open-source documentation
 

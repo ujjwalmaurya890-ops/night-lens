@@ -27,13 +27,17 @@ Playwright suite runs in CI.
 | 16 | Security hardening | Verified | `security.test.ts` (22) | typecheck + unit + build |
 | 17 | Privacy-first architecture | Verified | `privacy.test.ts` (11 invariants) + `docs/PRIVACY.md` | typecheck + unit + build |
 | 18 | Comprehensive automated testing | Verified | 606 → **701** tests, 9 → **15** files, 0 deleted | `npm test`: 701/701 pass |
-| 19 | GitHub Actions CI/CD | Implemented (not executed) | Workflow validated locally with a YAML parser; job/step structure inspected | Cannot run GitHub Actions from this sandbox; first real run happens on the next push/PR |
+| 19 | GitHub Actions CI/CD | Implemented (verify job executed locally; e2e job not executed) | YAML parsed; 4/4 action SHAs confirmed as real commits equal to the current `v4` tags; the 6 `run:` steps of the `verify` job executed locally in workflow order from the YAML (npm ci → typecheck → 701 tests → build → manifest assertion → summary): all pass | `e2e` job cannot run here — Playwright CDN, GitHub release assets and headless-shell-only npm Chromium are all dead ends, and Actions cannot be triggered from the sandbox. First real run is the next push/PR |
 | 20 | Professional open-source documentation | Verified | Documents reviewed against code; `privacy.test.ts` asserts `docs/PRIVACY.md` matches implementation | Markdown renders; internal links checked by inspection |
 
 ## Notes
 
 - **No contribution was claimed without code.** Items 01–18 touch source files; 19 is a workflow
   file; 20 is documentation plus one automated document/implementation consistency check.
+- **The `verify` job has now been run without GitHub.** Its steps are read out of `ci.yml` at
+  execution time and replayed in order, so the commands CI will run are the commands that passed
+  here. Only the `uses:` steps (checkout, setup-node, artifact upload) are GitHub-specific and were
+  skipped. The `e2e` job remains unexecuted.
 - **Browser (E2E) status is honest:** `npx playwright install chromium` and
   `npx playwright install --with-deps chromium` both fail in this sandbox (download host
   unreachable, no system Chromium). `npx playwright test --list` discovers 42 tests, which proves the
