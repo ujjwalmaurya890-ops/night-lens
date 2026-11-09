@@ -45,29 +45,38 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   sw: async ({ context }, use) => { await use(context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))); },
   extensionId: async ({ sw }, use) => { await use(new URL(sw.url()).host); },
   setSettings: async ({ sw }, use) => {
+    const matches = (got: Record<string, unknown> | undefined, want: Record<string, unknown>): boolean =>
+      Boolean(got) && JSON.stringify(got!.theme) === JSON.stringify(want.theme ?? got!.theme)
+      && JSON.stringify(got!.siteRules ?? {}) === JSON.stringify(want.siteRules ?? {});
+
     await use(async (s) => {
-      // A freshly started service worker can briefly lack chrome.storage; wait for it, but fail loudly on anything else.
-      for (let attempt = 0; ; attempt++) {
+      const want = s as Record<string, unknown>;
+      // The extension seeds defaults itself on install. Writing before that seed has landed would
+      // race it: the harness writes storage directly, so it is not ordered against the extension's
+      // own write queue. Wait for initialisation, then write, then confirm the write survived.
+      for (let attempt = 0; attempt < 20; attempt++) {
         try {
+          for (let wait = 0; wait < 40; wait++) {
+            const seeded = await sw.evaluate(([k]) => chrome.storage.local.get(k as string), [STORAGE_KEY] as const);
+            if (seeded[STORAGE_KEY] !== undefined) break;
+            await new Promise((r) => setTimeout(r, 50));
+          }
           await sw.evaluate(([k, v]) => chrome.storage.local.set({ [k as string]: v }), [STORAGE_KEY, s] as const);
-          // Confirm the write is readable from the storage the pages will read, not just that set() resolved.
-          let last = '';
           for (let check = 0; check < 20; check++) {
             const stored = await sw.evaluate(([k]) => chrome.storage.local.get(k as string), [STORAGE_KEY] as const);
-            const got = stored[STORAGE_KEY] as { theme?: unknown; siteRules?: unknown } | undefined;
-            const want = s as { theme?: unknown; siteRules?: unknown };
-            last = JSON.stringify({ stored: got ?? null, want: { theme: want.theme ?? null, siteRules: want.siteRules ?? null } });
-            if (got && JSON.stringify(got.theme) === JSON.stringify(want.theme ?? got.theme)
-              && JSON.stringify(got.siteRules ?? {}) === JSON.stringify(want.siteRules ?? {})) return;
+            const got = stored[STORAGE_KEY] as Record<string, unknown> | undefined;
+            if (matches(got, want)) return;
             await new Promise((r) => setTimeout(r, 100));
           }
-          throw new Error(`settings write was not readable after 2s: ${last}`);
+          // Clobbered by a late extension write: try the whole sequence again.
+          throw new Error('retry');
         } catch (error) {
-          const notReady = error instanceof Error && /reading 'local'/.test(error.message);
-          if (!notReady || attempt >= 20) throw error;
+          const retryable = error instanceof Error && (/reading 'local'/.test(error.message) || error.message === 'retry');
+          if (!retryable || attempt >= 19) throw error;
           await new Promise((r) => setTimeout(r, 100));
         }
       }
+      throw new Error('settings could not be stored');
     });
   },
 });
