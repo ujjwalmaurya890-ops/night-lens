@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { exportTheme, importTheme } from '../../shared/storage';
 import type { CustomTheme, Settings, ThemeId } from '../../shared/types';
 import { SectionCard, ThemeGrid, THEME_LABELS } from '../../ui/components';
+import { PURPOSE_PRESETS, applyPurposePreset, matchPurposePreset } from '../../shared/presets';
+import { ThemePreview } from '../../ui/ThemePreview';
 import type { Notice } from '../../ui/hooks';
 import {
   IconChevronRight,
@@ -127,6 +129,38 @@ export function ThemesTab({
           palette. Themes switch live and can be assigned per domain.
         </p>
       </div>
+
+      <SectionCard
+        icon={<IconSparkles size={15} />}
+        title="Purpose Presets"
+        description="A palette plus the luminance and contrast calibration that suits a specific reading situation. Applied in one step and remembered across restarts."
+      >
+        <div className="preset-row" role="group" aria-label="Purpose presets">
+          {PURPOSE_PRESETS.map((preset) => {
+            const active = matchPurposePreset(settings) === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className={`preset-chip ${active ? 'active' : ''}`}
+                aria-pressed={active}
+                aria-describedby={`purpose-${preset.id}-desc`}
+                onClick={() => onChange((s) => applyPurposePreset(s, preset.id), `${preset.label} applied.`)}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+        <ul className="purpose-preset-notes">
+          {PURPOSE_PRESETS.map((preset) => (
+            <li key={preset.id} id={`purpose-${preset.id}-desc`} className="field-hint">
+              <strong>{preset.label}</strong> — {preset.purpose}
+            </li>
+          ))}
+        </ul>
+        <ThemePreview settings={settings} />
+      </SectionCard>
 
       <SectionCard
         icon={<IconPalette size={15} />}

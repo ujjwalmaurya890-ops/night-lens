@@ -22,13 +22,17 @@ Ten curated palettes — **Midnight, Deep Space, AMOLED, Soft Dark, Charcoal, Gr
 
 Adjust **brightness, contrast, warmth, saturation, accent hue, and text size**. Changes are stored locally and update open pages. Brightness affects webpage rendering only; it does not change hardware display brightness. **Midnight** is the fresh-install default.
 
+Five **purpose presets** apply a palette together with the calibration that suits a situation: *Balanced dark* (everyday), *Deep dark* (dim rooms, OLED), *Dim reading* (long-form at night), *High contrast* (7:1 text floor, emphasised borders) and *Soft night* (warm, low glare). They are applied in one step and remembered across restarts.
+
+A **live preview** in Settings renders the exact surface set the content script will apply — page, raised card, body text, muted text, link, button, input and border — together with the measured contrast ratios. It is preview-only: nothing on your websites changes until you change a setting.
+
 Custom themes can be created, edited, imported, and exported. Full settings backup/restore is also available.
 
 ### Website controls
 
 - Global on/off switch and per-site exclude/force-on rules.
 - A rule for `example.com` covers `docs.example.com`; the closest hostname wins.
-- Per-site themes, visual overrides, compatibility profiles, and sanitized custom CSS inherit the same way.
+- Per-site themes, visual overrides (theme, brightness, contrast, warmth), compatibility profiles, and sanitized custom CSS inherit the same way. Overrides are created from the **Websites** tab and only store values that differ from your global settings.
 - IP addresses and single-label hostnames match exactly; suffix lookalikes such as `notexample.com` never match `example.com`.
 - Reset website preferences without resetting global appearance.
 
@@ -43,7 +47,7 @@ Custom themes can be created, edited, imported, and exported. Full settings back
 
 ### Accessibility and controls
 
-- Keyboard-navigable popup/options UI with semantic controls, accessible names, live status messages, and visible focus.
+- Keyboard-navigable popup/options UI with semantic controls, accessible names, live status messages, visible focus, arrow-key section navigation, and a skip link to the settings content.
 - High-contrast mode, link underlining, and reduced-motion support (including the OS preference).
 - **`Alt+Shift+D`** toggles NightLens globally. Rebind it at `chrome://extensions/shortcuts` where supported.
 - Optional schedules, system appearance integration, reading mode, and local developer diagnostics.
@@ -87,6 +91,18 @@ Browser-internal pages, the Chrome Web Store, local files, and PDF viewers are u
 
 Additional fixture screenshots are in [`docs/screenshots/`](docs/screenshots/). These are project fixtures, not a claim of compatibility with every live website.
 
+## Verification
+
+| Check | Result in this repository |
+|---|---|
+| `npm run typecheck` | Pass — strict TypeScript, no errors |
+| `npm test` | Pass — 704 Vitest tests across 15 files (engine, colour, storage, UI, accessibility, security, privacy invariants) |
+| `npm run build` | Pass — Manifest V3 bundle in `dist/` |
+| `npm run test:e2e` | Pass in CI — 42 Playwright tests in real Chromium with the extension loaded, [run 42561937603](https://github.com/ujjwalmaurya890-ops/night-lens/actions/runs/42561937603) |
+
+Claims in this README are limited to what those checks demonstrate. Per-site behaviour on live
+websites is heuristic; see [Known limitations](docs/LIMITATIONS.md).
+
 ## Commands
 
 | Command | Purpose |
@@ -121,18 +137,21 @@ Source is organized into `src/engine/`, `src/content/`, `src/background/`, `src/
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md), use the issue templates, and include test evidence in pull requests. Keep changes focused and preserve the privacy and permission guarantees.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [development guide](docs/DEVELOPMENT.md), use the issue templates, and include test evidence in pull requests. Keep changes focused and preserve the privacy and permission guarantees — `tests/unit/privacy.test.ts` fails the build if network access, extra permissions, tracking dependencies, or HTML/eval injection appear.
 
 NightLens is available under the [MIT License](LICENSE).
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md)
+- [Architecture](docs/ARCHITECTURE.md) — runtime model, module map, theming pass
+- [Development guide](docs/DEVELOPMENT.md) — setup, commands, adding themes/messages, testing rules
 - [Installation](docs/INSTALL.md)
+- [Privacy](docs/PRIVACY.md) — what is stored, what is processed, why each permission exists
+- [Security policy](SECURITY.md) · [Security & privacy details](docs/SECURITY_AND_PRIVACY.md)
+- [Known limitations](docs/LIMITATIONS.md)
+- [Changelog](CHANGELOG.md)
+- [Engineering audit](docs/ENGINEERING_AUDIT.md) · [Contribution tracker](docs/CONTRIBUTION_TRACKER.md) · [Engineering report](docs/FINAL_ENGINEERING_REPORT.md)
 - [Browser test checklist](docs/BROWSER_TEST_CHECKLIST.md)
 - [Feature/test matrix](docs/FEATURE_TEST_MATRIX.md)
-- [Test report](docs/TEST_REPORT.md)
-- [Implementation report](docs/IMPLEMENTATION_REPORT.md)
-- [Known limitations](docs/LIMITATIONS.md)
-- [Security & Privacy](docs/SECURITY_AND_PRIVACY.md)
+- [Test report](docs/TEST_REPORT.md) · [Implementation report](docs/IMPLEMENTATION_REPORT.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)

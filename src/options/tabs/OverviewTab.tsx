@@ -240,9 +240,11 @@ export function OverviewTab({
           </button>
         </form>
 
-        <div id="exclude-error-overview" className="status error" role="alert">
-          {inputError}
-        </div>
+        {inputError ? (
+          <div id="exclude-error-overview" className="status error" role="alert">
+            {inputError}
+          </div>
+        ) : null}
 
         {excluded.length === 0 ? (
           <div className="empty-state">

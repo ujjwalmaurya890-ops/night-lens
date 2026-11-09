@@ -1,5 +1,6 @@
 import { STORAGE_KEY } from '../shared/defaults';
-import { loadSettings, resetSettings, updateSettings } from '../shared/storage';
+import { isExportSettingsMessage, isGetStorageMessage } from '../shared/messages';
+import { ensureSettings, exportSettings, loadSettings, updateSettings } from '../shared/storage';
 import type { Settings } from '../shared/types';
 
 export const TOGGLE_COMMAND = 'toggle-nightlens';
@@ -22,24 +23,26 @@ export async function handleCommand(command: string): Promise<void> {
 }
 
 export async function handleInstalled(): Promise<void> {
-  const stored = await chrome.storage.local.get(STORAGE_KEY);
-  const settings = stored[STORAGE_KEY] === undefined ? await resetSettings() : await loadSettings();
-  await updateBadge(settings);
+  // Read-then-write is atomic here: anything written by another surface in between is kept.
+  await updateBadge(await ensureSettings());
 }
 
 export async function handleStartup(): Promise<void> {
   await updateBadge(await loadSettings());
 }
 
-export async function handleMessage(message: unknown, _sender: chrome.runtime.MessageSender): Promise<unknown> {
-  if (typeof message !== 'object' || message === null) return null;
-  const m = message as Record<string, unknown>;
-  if (m.type === 'nightlens/get-storage') {
-    return await chrome.storage.local.get(STORAGE_KEY);
+/**
+ * Only the two request types the extension actually uses are answered, and only for messages
+ * that carry this extension's own id. Replies are sanitised settings, never raw storage, so a
+ * corrupted or hand-edited value cannot be handed to a consumer unchecked.
+ */
+export async function handleMessage(message: unknown, sender: chrome.runtime.MessageSender): Promise<unknown> {
+  if (sender?.id !== chrome.runtime.id) return null;
+  if (isGetStorageMessage(message)) {
+    return { [STORAGE_KEY]: await loadSettings() };
   }
-  if (m.type === 'nightlens/export-settings') {
-    const settings = await loadSettings();
-    return { data: JSON.stringify(settings, null, 2) };
+  if (isExportSettingsMessage(message)) {
+    return { data: exportSettings(await loadSettings()) };
   }
   return null;
 }

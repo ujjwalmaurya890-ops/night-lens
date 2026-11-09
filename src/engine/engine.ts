@@ -42,6 +42,13 @@ const STYLE_ATTR_RELEVANT = /color|background|border|fill|stroke|box-shadow/i;
 
 const BATCH_SIZE = 400;
 const SUBTREE_REPROCESS_LIMIT = 2000;
+/** Attributes whose change can swap a site's colour system, observed on every element. */
+const THEME_ATTRIBUTES = [
+  'class', 'style', 'role',
+  'data-theme', 'data-bs-theme', 'data-color-mode', 'data-color-scheme', 'data-mode', 'data-theme-mode',
+] as const;
+/** Bound for the gradient/shadow payload cache; it is dropped wholesale when exceeded. */
+const MAX_CSS_VALUES = 4000;
 const ICON_MAX_PX = 64;
 const PLATE_MIN_W = 100;
 const PLATE_MIN_H = 60;
@@ -104,6 +111,74 @@ interface Read {
 const parentOf = (el: Element): Element | null => el.parentElement ?? ((el.parentNode as ShadowRoot | null)?.host ?? null);
 const opaque = (c: RGBA | RGB): RGB => ({ r: c.r, g: c.g, b: c.b });
 
+/**
+ * Fingerprint of every config input that can change rendered output. Used to make
+ * update() a no-op when a storage notification carries an identical effective config
+ * (for example, editing a site rule that does not affect this page).
+ */
+export function configSignature(config: EngineConfig): string {
+  const t = config.tokens;
+  const c = t.colors;
+  return JSON.stringify([
+    t.preset, t.minTextContrast, t.minBorderContrast, t.minControlBorderContrast, t.minDisabledContrast,
+    t.neutralHue, t.neutralSat, t.bgL, t.bgMidL, t.textL, t.mutedL, t.accentHue ?? null, t.customId ?? null,
+    c.bg, c.bgRaised, c.text, c.textMuted, c.link, c.linkVisited, c.border, c.focus, c.selectionBg, c.selectionText,
+    config.skipNativeDarkCheck, config.readingMode ?? null, config.customCSS ?? '',
+    config.accessibility ?? null, config.developerMode ?? false, config.compatibility ?? 'auto',
+    config.textSize ?? 100, config.batchSize ?? null, config.debounceMs ?? null, config.enableCache ?? null,
+  ]);
+}
+
+/**
+ * Ref-counted history patching. Two ThemeEngine instances on one window (content script plus
+ * tests, or an SPA that re-injects) must not chain their wrappers: the second would capture
+ * the first's wrapper as "original" and restore it later, leaving the page permanently patched.
+ */
+interface HistoryPatch {
+  callbacks: Set<() => void>;
+  originalPush: History['pushState'];
+  originalReplace: History['replaceState'];
+  push: History['pushState'];
+  replace: History['replaceState'];
+}
+const historyPatches = new WeakMap<Window, HistoryPatch>();
+
+function acquireHistoryPatch(win: Window, onNavigate: () => void): void {
+  const existing = historyPatches.get(win);
+  if (existing) { existing.callbacks.add(onNavigate); return; }
+  try {
+    const history = win.history;
+    const patch: HistoryPatch = {
+      callbacks: new Set([onNavigate]),
+      originalPush: history.pushState.bind(history),
+      originalReplace: history.replaceState.bind(history),
+      push: (...args: Parameters<History['pushState']>) => {
+        patch.originalPush.apply(history, args);
+        for (const callback of [...patch.callbacks]) callback();
+      },
+      replace: (...args: Parameters<History['replaceState']>) => {
+        patch.originalReplace.apply(history, args);
+        for (const callback of [...patch.callbacks]) callback();
+      },
+    };
+    history.pushState = patch.push;
+    history.replaceState = patch.replace;
+    historyPatches.set(win, patch);
+  } catch { /* locked-down history: navigation events remain the fallback */ }
+}
+
+function releaseHistoryPatch(win: Window, onNavigate: () => void): void {
+  const patch = historyPatches.get(win);
+  if (!patch) return;
+  patch.callbacks.delete(onNavigate);
+  if (patch.callbacks.size > 0) return;
+  try {
+    if (win.history.pushState === patch.push) win.history.pushState = patch.originalPush;
+    if (win.history.replaceState === patch.replace) win.history.replaceState = patch.originalReplace;
+  } catch { /* ignore */ }
+  historyPatches.delete(win);
+}
+
 export class ThemeEngine {
   private running = false;
   private applied = false;
@@ -126,6 +201,9 @@ export class ThemeEngine {
   private seenColors = new Map<string, RGBA>(); // simple cache for parsed colors
   private navigationTimer: ReturnType<typeof setTimeout> | null = null;
   private lastUrl = '';
+  private signature = '';
+  /** Native-dark result is stable for a URL; recomputed on navigation and on page theme flips. */
+  private nativeDarkCache: { url: string; dark: boolean } | null = null;
 
   constructor(private readonly doc: Document = document, private readonly win: Window = window, private readonly options: EngineOptions = {}) {}
 
@@ -137,11 +215,11 @@ export class ThemeEngine {
     if (this.running) this.stop();
     this.running = true;
     this.config = config;
+    this.signature = configSignature(config);
     this.attachStyles();
     this.rootObserver = new MutationObserver(() => this.scheduleReevaluate());
-    const attrs = ['class', 'style', 'data-theme', 'data-bs-theme', 'data-color-mode', 'data-color-scheme', 'data-mode', 'data-theme-mode'];
-    this.rootObserver.observe(this.doc.documentElement, { attributes: true, attributeFilter: attrs });
-    if (this.doc.body) this.rootObserver.observe(this.doc.body, { attributes: true, attributeFilter: attrs });
+    this.rootObserver.observe(this.doc.documentElement, { attributes: true, attributeFilter: [...THEME_ATTRIBUTES] });
+    if (this.doc.body) this.rootObserver.observe(this.doc.body, { attributes: true, attributeFilter: [...THEME_ATTRIBUTES] });
     this.doc.addEventListener('load', this.onResourceLoad, true);
     this.win.addEventListener('load', this.onWindowLoad);
     this.doc.addEventListener('DOMContentLoaded', this.onReady);
@@ -149,13 +227,14 @@ export class ThemeEngine {
     this.lastUrl = this.win.location.href;
     this.win.addEventListener('popstate', this.onNavigation);
     this.win.addEventListener('hashchange', this.onNavigation);
-    // Intercept pushState/replaceState
-    this.patchHistory();
+    this.listenForNavigationApi();
+    // Intercept pushState/replaceState (shared, ref-counted per window)
+    acquireHistoryPatch(this.win, this.onNavigation);
 
     if (this.doc.readyState === 'loading') {
       this.beginApply();
     } else {
-      this.evaluate();
+      this.evaluate({ forceDetect: true });
     }
     // Performance monitoring for dev builds
     if (config.developerMode && typeof performance !== 'undefined') {
@@ -165,6 +244,11 @@ export class ThemeEngine {
 
   update(config: EngineConfig): void {
     if (!this.running) { this.start(config); return; }
+    const signature = configSignature(config);
+    // Storage notifications fire for every settings write, including ones that cannot affect
+    // this page. Re-running a full pass would re-read every computed style for nothing.
+    if (signature === this.signature) return;
+    this.signature = signature;
     this.config = config;
     for (const ctx of this.contexts.values()) {
       ctx.base.textContent = buildBaseCss(config.tokens, {
@@ -192,7 +276,7 @@ export class ThemeEngine {
     this.doc.removeEventListener('DOMContentLoaded', this.onReady);
     this.win.removeEventListener('popstate', this.onNavigation);
     this.win.removeEventListener('hashchange', this.onNavigation);
-    this.unpatchHistory();
+    releaseHistoryPatch(this.win, this.onNavigation);
     if (this.frame !== null && typeof this.win.cancelAnimationFrame === 'function') this.win.cancelAnimationFrame(this.frame);
     this.frame = null;
     this.scheduled = false;
@@ -202,12 +286,16 @@ export class ThemeEngine {
     this.reevalTimer = this.rescanTimer = this.navigationTimer = null;
     this.status = null;
     this.seenColors.clear();
+    this.nativeDarkCache = null;
+    this.lastUrl = '';
+    this.signature = '';
+    this.removeNavigationApiListeners();
   }
 
   // ---- lifecycle ---
 
-  private onReady = (): void => { this.moveStylesToEnd(); this.evaluate(); };
-  private onWindowLoad = (): void => { this.moveStylesToEnd(); this.evaluate(); this.scheduleRescan(); };
+  private onReady = (): void => { this.moveStylesToEnd(); this.evaluate({ forceDetect: true }); };
+  private onWindowLoad = (): void => { this.moveStylesToEnd(); this.evaluate({ forceDetect: true }); this.scheduleRescan(); };
   private onResourceLoad = (ev: Event): void => {
     const t = ev.target as Element | null;
     if (t && t.localName === 'link') this.scheduleRescan();
@@ -216,30 +304,31 @@ export class ThemeEngine {
     if (this.win.location.href === this.lastUrl) return;
     this.lastUrl = this.win.location.href;
     if (this.navigationTimer) clearTimeout(this.navigationTimer);
-    this.navigationTimer = this.after(200, () => { if (this.applied) this.rescanAll(); else this.evaluate(); });
+    // A new URL may be a different theme (the site may even be natively dark now).
+    this.nativeDarkCache = null;
+    this.navigationTimer = this.after(200, () => { if (this.applied) { this.evaluate({ forceDetect: true }); this.rescanAll(); } else this.evaluate({ forceDetect: true }); });
   };
 
-  private originalPushState: typeof history.pushState | null = null;
-  private originalReplaceState: typeof history.replaceState | null = null;
-  private patchHistory(): void {
+  /**
+   * The Navigation API fires for SPAs that change content without touching history, and for
+   * same-document traversals. It is optional: not every Chromium version exposes it.
+   */
+  private navigationApi: { addEventListener?: (type: string, cb: () => void) => void; removeEventListener?: (type: string, cb: () => void) => void } | null = null;
+  private listenForNavigationApi(): void {
     try {
-      this.originalPushState = this.win.history.pushState.bind(this.win.history);
-      this.originalReplaceState = this.win.history.replaceState.bind(this.win.history);
-      this.win.history.pushState = (...args: Parameters<typeof history.pushState>) => {
-        this.originalPushState!.apply(this.win.history, args as any);
-        this.onNavigation();
-      };
-      this.win.history.replaceState = (...args: Parameters<typeof history.replaceState>) => {
-        this.originalReplaceState!.apply(this.win.history, args as any);
-        this.onNavigation();
-      };
-    } catch { /* ignore */ }
+      const nav = (this.win as Window & { navigation?: ThemeEngine['navigationApi'] }).navigation;
+      if (!nav?.addEventListener) return;
+      this.navigationApi = nav;
+      nav.addEventListener('navigatesuccess', this.onNavigation);
+      nav.addEventListener('currententrychange', this.onNavigation);
+    } catch { /* unsupported: popstate/hashchange remain */ }
   }
-  private unpatchHistory(): void {
+  private removeNavigationApiListeners(): void {
     try {
-      if (this.originalPushState) this.win.history.pushState = this.originalPushState;
-      if (this.originalReplaceState) this.win.history.replaceState = this.originalReplaceState;
+      this.navigationApi?.removeEventListener?.('navigatesuccess', this.onNavigation);
+      this.navigationApi?.removeEventListener?.('currententrychange', this.onNavigation);
     } catch { /* ignore */ }
+    this.navigationApi = null;
   }
 
   private after(ms: number, fn: () => void): ReturnType<typeof setTimeout> {
@@ -255,20 +344,28 @@ export class ThemeEngine {
 
   private scheduleReevaluate(): void {
     if (this.reevalTimer) clearTimeout(this.reevalTimer);
-    this.reevalTimer = this.after(this.debounceMs, () => { this.evaluate(); if (this.applied) this.rescanAll(); });
+    // Root-level class/style changes are how sites flip their own light/dark theme.
+    this.reevalTimer = this.after(this.debounceMs, () => { this.evaluate({ forceDetect: true }); if (this.applied) this.rescanAll(); });
   }
   private scheduleRescan(): void {
     if (this.rescanTimer) clearTimeout(this.rescanTimer);
     this.rescanTimer = this.after(this.debounceMs, () => { if (this.applied) this.rescanAll(); });
   }
 
-  private evaluate(): void {
+  private isNativeDark(forceDetect: boolean): boolean {
+    if (this.config.skipNativeDarkCheck || !this.doc.body) return false;
+    const url = this.win.location.href;
+    if (!forceDetect && this.nativeDarkCache && this.nativeDarkCache.url === url) return this.nativeDarkCache.dark;
+    this.detachDocStyles();
+    let dark = false;
+    try { dark = detectNativeDark(this.doc, this.win).dark; } finally { if (!dark) this.reattachDocStyles(); }
+    this.nativeDarkCache = { url, dark };
+    return dark;
+  }
+
+  private evaluate(options: { forceDetect?: boolean } = {}): void {
     if (!this.running) return;
-    let native = false;
-    if (!this.config.skipNativeDarkCheck && this.doc.body) {
-      this.detachDocStyles();
-      try { native = detectNativeDark(this.doc, this.win).dark; } finally { if (!native) this.reattachDocStyles(); }
-    }
+    const native = this.isNativeDark(options.forceDetect === true);
     // Compatibility mode: gentle never forces on native dark
     if (this.config.compatibility === 'gentle' && native) {
       this.teardownApplied();
@@ -305,12 +402,10 @@ export class ThemeEngine {
     this.treeObserver = null;
     this.queue.clear();
     for (const root of [...this.contexts.keys()]) {
-      const container = root as Document | ShadowRoot;
-      container.querySelectorAll(MANAGED_SELECTOR).forEach((el) => { this.strip(el); el.removeAttribute(READY); });
-      // Also clean dev attributes
-      container.querySelectorAll(`[${DEV_ATTR}]`).forEach((el) => el.removeAttribute(DEV_ATTR));
+      this.stripWithin(root);
       this.detachContext(this.contexts.get(root)!);
     }
+    this.doc.documentElement.removeAttribute(READY);
     this.contexts.clear();
     this.processed = new WeakSet();
     this.bgInfo = new WeakMap();
@@ -363,7 +458,7 @@ export class ThemeEngine {
     this.observeRoot(root);
   }
   private observeRoot(root: Node): void {
-    this.treeObserver?.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+    this.treeObserver?.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'role', 'data-theme', 'data-color-mode'] });
   }
 
   private contextFor(el: Element): RootContext | null {
@@ -399,6 +494,7 @@ export class ThemeEngine {
     const key = `${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
     const property = attr === 'data-nl-gradient' ? 'background-image' : 'box-shadow';
     if (typeof CSS !== 'undefined' && !CSS.supports(property, value)) return false;
+    if (this.cssValues.size > MAX_CSS_VALUES) this.cssValues.clear();
     this.cssValues.set(key, value);
     el.setAttribute(attr, key);
     this.addRule(el, attr, key);
@@ -444,8 +540,10 @@ export class ThemeEngine {
     for (const rec of records) {
       if (rec.type === 'childList') {
         rec.addedNodes.forEach((n) => {
+          // Insertions are queued in full (batching keeps the work time-sliced); capping here
+          // would permanently leave the tail of a large append unthemed.
           if (n.nodeType === 1 && !(n as Element).hasAttribute(OWNED)) this.enqueueSubtree(n);
-          // Handle iframe additions – content script in iframe handles itself via all_frames
+          // Iframes are handled by their own content script (all_frames).
         });
         continue;
       }
@@ -462,6 +560,9 @@ export class ThemeEngine {
     // Do not retain style contexts for shadow hosts removed by an SPA.
     for (const [root, ctx] of this.contexts) {
       if (root !== this.doc && !(root as ShadowRoot).host.isConnected) {
+        // Strip before dropping the context: a host that is re-attached later would otherwise
+        // keep stale data-nl-* attributes whose generated rules no longer exist.
+        this.stripWithin(root);
         this.detachContext(ctx);
         this.contexts.delete(root);
       }
@@ -498,6 +599,14 @@ export class ThemeEngine {
     if (this.queue.size > 0) this.schedule();
   }
 
+  /** Remove every extension-generated attribute inside a root (document or shadow root). */
+  private stripWithin(root: Node): void {
+    const container = root as Node & Pick<ParentNode, 'querySelectorAll'>;
+    container.querySelectorAll(MANAGED_SELECTOR).forEach((el) => { this.strip(el); el.removeAttribute(READY); });
+    container.querySelectorAll(`[${DEV_ATTR}]`).forEach((el) => el.removeAttribute(DEV_ATTR));
+    if ((root as Document).documentElement) (root as Document).documentElement.removeAttribute(READY);
+  }
+
   private strip(el: Element): void {
     for (const a of MANAGED_ATTRS) el.removeAttribute(a);
     el.removeAttribute(DEV_ATTR);
@@ -522,9 +631,15 @@ export class ThemeEngine {
     const cs = this.win.getComputedStyle(el);
     const isSvg = el.namespaceURI === SVG_NS && el.localName === 'svg';
     const kind: Read['kind'] = isSvg ? 'svg' : el.localName === 'canvas' ? 'canvas' : 'element';
-    const rect = el.getBoundingClientRect();
-    let width = rect.width, height = rect.height;
-    if (!width || !height) { width = parseFloat(el.getAttribute('width') ?? ''); height = parseFloat(el.getAttribute('height') ?? ''); }
+    // Geometry is only consulted for canvas/SVG plates. Calling getBoundingClientRect for every
+    // element would force a layout query per node and buys nothing for ordinary elements.
+    let width = 0, height = 0;
+    if (kind !== 'element') {
+      const rect = el.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      if (!width || !height) { width = parseFloat(el.getAttribute('width') ?? ''); height = parseFloat(el.getAttribute('height') ?? ''); }
+    }
     const r: Read = {
       el, kind, bg: null, fg: null, hasBgImage: false, gradient: null, boxShadow: null, borders: [], disabled: false, coloredLink: false,
       control: CONTROL_TAGS.has(el.localName), isCode: CODE_TAGS.has(el.tagName), isTable: TABLE_TAGS.has(el.tagName),

@@ -1,4 +1,4 @@
-import { useRef, useState, type ComponentType, type FormEvent } from 'react';
+import { useRef, useState, type ComponentType, type FormEvent, type KeyboardEvent } from 'react';
 import type { LucideProps } from 'lucide-react';
 import { MAX_SITE_RULES } from '../shared/defaults';
 import { hostnameFromUserInput } from '../shared/hostname';
@@ -56,9 +56,31 @@ const TABS: { id: Tab; label: string; Icon: ComponentType<LucideProps> }[] = [
 export function Options() {
   const { settings, notice, change, reset, setNotice } = useSettings();
   const [tab, setTab] = useState<Tab>('overview');
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
   const [input, setInput] = useState('');
   const [inputError, setInputError] = useState('');
   const sidebarImportRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Sidebar sections behave like a list of links: Tab reaches the group, then arrow keys move
+   * between sections and focus follows selection, mirroring native navigation lists.
+   */
+  const onSidebarKeyDown = (event: KeyboardEvent<HTMLElement>, index: number) => {
+    const step =
+      event.key === 'ArrowDown' || event.key === 'ArrowRight'
+        ? 1
+        : event.key === 'ArrowUp' || event.key === 'ArrowLeft'
+          ? -1
+          : 0;
+    let target: Tab | null = null;
+    if (step !== 0) target = TABS[(index + step + TABS.length) % TABS.length]!.id;
+    else if (event.key === 'Home') target = TABS[0]!.id;
+    else if (event.key === 'End') target = TABS[TABS.length - 1]!.id;
+    if (!target) return;
+    event.preventDefault();
+    setTab(target);
+    tabRefs.current[target]?.focus();
+  };
 
   const excluded = Object.entries(settings.siteRules)
     .filter(([, m]) => m === 'off')
@@ -139,6 +161,9 @@ export function Options() {
       className="dashboard shell-enter"
       data-reduced-motion={settings.accessibility.reducedMotion ? 'true' : undefined}
     >
+      <a className="skip-link" href="#options-main">
+        Skip to settings content
+      </a>
       <header className="options-header">
         <div className="options-header-inner">
           <div className="options-brand-group">
@@ -175,12 +200,17 @@ export function Options() {
       <div className="options-workspace">
         <nav className="sidebar" aria-label="Settings sections">
           <div className="sidebar-section">Preferences</div>
-          {TABS.map(({ id, label, Icon }) => (
+          {TABS.map(({ id, label, Icon }, index) => (
             <button
               key={id}
               type="button"
+              ref={(node) => {
+                tabRefs.current[id] = node;
+              }}
               className={`sidebar-item ${tab === id ? 'active' : ''}`}
               aria-current={tab === id ? 'page' : undefined}
+              aria-controls="options-main"
+              onKeyDown={(event) => onSidebarKeyDown(event, index)}
               onClick={() => setTab(id)}
             >
               <span className="sidebar-item-icon">
@@ -221,7 +251,10 @@ export function Options() {
           />
         </nav>
 
-        <main className="options-main">
+        <main className="options-main" id="options-main" tabIndex={-1}>
+          <div role="status" aria-live="polite" className="sr-only">
+            {TABS.find((entry) => entry.id === tab)?.label} settings
+          </div>
           <div key={tab} className="stack-xl panel-enter">
             {tab === 'overview' && (
               <OverviewTab

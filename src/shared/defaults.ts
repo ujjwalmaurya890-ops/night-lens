@@ -2,6 +2,10 @@ import type { AccessibilitySettings, PerformanceSettings, ReadingModeSettings, S
 
 export const STORAGE_KEY = 'nightlens:settings';
 export const MAX_SITE_RULES = 2000;
+export const MAX_SITE_THEMES = 1000;
+export const MAX_SITE_OVERRIDES = 500;
+export const MAX_COMPATIBILITY_ENTRIES = 1000;
+export const MAX_CUSTOM_CSS_SITES = 200;
 export const MAX_CUSTOM_THEMES = 50;
 export const MAX_CUSTOM_CSS_LENGTH = 20000;
 
