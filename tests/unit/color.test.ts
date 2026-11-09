@@ -125,3 +125,43 @@ describe('ensureContrast', () => {
     expect(Math.abs(rgbToHsl(out).h - rgbToHsl({ r: 40, g: 40, b: 200 }).h)).toBeLessThan(6);
   });
 });
+
+describe('extended colour parsing (hwb, named colours, invalid input)', () => {
+  it('parses hwb() including the neutral-grey case', () => {
+    // hwb(0 0% 0%) is pure red.
+    expect(parseColor('hwb(0 0% 0%)')).toMatchObject({ r: 255, g: 0, b: 0, a: 1 });
+    // hwb(0 100% 0%) is white; hwb(0 0% 100%) is black.
+    expect(parseColor('hwb(0 100% 0%)')).toMatchObject({ r: 255, g: 255, b: 255 });
+    expect(parseColor('hwb(0 0% 100%)')).toMatchObject({ r: 0, g: 0, b: 0 });
+    // Equal whiteness and blackness sum to a 50% grey regardless of hue.
+    expect(parseColor('hwb(120 50% 50%)')).toMatchObject({ r: 128, g: 128, b: 128 });
+    // Alpha is honoured.
+    expect(parseColor('hwb(210 20% 40% / 40%)')?.a).toBeCloseTo(0.4, 5);
+  });
+
+  it('parses the full CSS named-colour table', () => {
+    for (const [name, hex] of [
+      ['rebeccapurple', '#663399'],
+      ['cornflowerblue', '#6495ed'],
+      ['darkslategray', '#2f4f4f'],
+      ['lightslategrey', '#778899'],
+      ['tomato', '#ff6347'],
+      ['whitesmoke', '#f5f5f5'],
+    ] as const) {
+      expect(parseColor(name)).toEqual({ ...parseColor(hex)!, a: 1 });
+    }
+    expect(Object.is(parseColor('grey'), parseColor('grey'))).toBe(false); // fresh objects, no shared mutation
+  });
+
+  it('returns null for values it cannot interpret instead of guessing', () => {
+    for (const value of ['currentcolor', 'inherit', 'initial', 'not-a-colour', 'rgb()', 'rgb(1 2)', 'hwb(0 0%)', 'hsl(a b c)', 'color(unknown-space 1 2 3)']) {
+      expect(parseColor(value), value).toBeNull();
+    }
+  });
+
+  it('is deterministic for the same input', () => {
+    const once = parseColor('oklch(0.72 0.15 250)');
+    const twice = parseColor('oklch(0.72 0.15 250)');
+    expect(once).toEqual(twice);
+  });
+});
