@@ -1,7 +1,26 @@
-import { DEFAULT_ACCESSIBILITY, DEFAULT_PERFORMANCE, DEFAULT_READING, DEFAULT_SCHEDULE, LIMITS, MAX_CUSTOM_THEMES, MAX_SITE_RULES, STORAGE_KEY, cloneDefaults, migrateLegacySettings } from './defaults';
+import {
+  DEFAULT_ACCESSIBILITY, DEFAULT_PERFORMANCE, DEFAULT_READING, DEFAULT_SCHEDULE, LIMITS,
+  MAX_COMPATIBILITY_ENTRIES, MAX_CUSTOM_CSS_SITES, MAX_CUSTOM_THEMES, MAX_SITE_OVERRIDES,
+  MAX_SITE_RULES, MAX_SITE_THEMES, STORAGE_KEY, cloneDefaults, migrateLegacySettings,
+} from './defaults';
 import { sanitizeCustomCss } from './css';
 import { normalizeHostname } from './hostname';
-import { SITE_MODES, THEME_IDS, type AccessibilitySettings, type CustomTheme, type PerformanceSettings, type ReadingModeSettings, type ScheduleSettings, type Settings, type SiteMode, type SiteRules, type ThemeId } from './types';
+import {
+  COMPATIBILITY_MODES, SITE_MODES, THEME_IDS, type AccessibilitySettings, type CompatibilityMode, type CustomTheme,
+  type PerformanceSettings, type ReadingModeSettings, type ScheduleSettings, type Settings,
+  type SiteMode, type SiteRules, type SiteOverride, type ThemeId,
+} from './types';
+
+/** True while this script's extension context is still alive (false after reload/update/removal). */
+export function isExtensionContextValid(): boolean {
+  try {
+    return typeof chrome !== 'undefined' && typeof chrome.runtime?.id === 'string' && chrome.runtime.id !== '';
+  } catch {
+    return false;
+  }
+}
+
+export const STALE_CONTEXT_ERROR = 'NightLens was updated, reloaded or removed. Reload this page to reconnect.';
 
 function clampPercent(value: unknown, limit: { min: number; max: number }, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
@@ -26,29 +45,34 @@ function sanitizeSiteRules(raw: unknown): SiteRules {
 function sanitizeSiteThemes(raw: unknown): Record<string, ThemeId> {
   const out: Record<string, ThemeId> = {};
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return out;
+  let count = 0;
   for (const [key, value] of Object.entries(raw)) {
+    if (count >= MAX_SITE_THEMES) break;
     const host = normalizeHostname(key);
     if (host && (THEME_IDS as readonly unknown[]).includes(value)) {
       out[host] = value as ThemeId;
+      count++;
     }
   }
   return out;
 }
 
-function sanitizeSiteOverrides(raw: unknown): Record<string, { theme?: ThemeId; brightness?: number; contrast?: number; warmth?: number; saturation?: number }> {
-  const out: Record<string, any> = {};
+function sanitizeSiteOverrides(raw: unknown): Record<string, SiteOverride> {
+  const out: Record<string, SiteOverride> = {};
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return out;
+  let count = 0;
   for (const [key, value] of Object.entries(raw)) {
+    if (count >= MAX_SITE_OVERRIDES) break;
     const host = normalizeHostname(key);
-    if (!host || typeof value !== 'object' || value === null) continue;
+    if (!host || typeof value !== 'object' || value === null || Array.isArray(value)) continue;
     const v = value as Record<string, unknown>;
-    const entry: any = {};
+    const entry: SiteOverride = {};
     if ((THEME_IDS as readonly unknown[]).includes(v.theme)) entry.theme = v.theme as ThemeId;
     if (typeof v.brightness === 'number' && Number.isFinite(v.brightness)) entry.brightness = clampPercent(v.brightness, LIMITS.brightness, LIMITS.brightness.default);
     if (typeof v.contrast === 'number' && Number.isFinite(v.contrast)) entry.contrast = clampPercent(v.contrast, LIMITS.contrast, LIMITS.contrast.default);
     if (typeof v.warmth === 'number' && Number.isFinite(v.warmth)) entry.warmth = clampPercent(v.warmth, LIMITS.warmth, LIMITS.warmth.default);
     if (typeof v.saturation === 'number' && Number.isFinite(v.saturation)) entry.saturation = clampPercent(v.saturation, LIMITS.saturation, LIMITS.saturation.default);
-    if (Object.keys(entry).length > 0) out[host] = entry;
+    if (Object.keys(entry).length > 0) { out[host] = entry; count++; }
   }
   return out;
 }
@@ -56,16 +80,20 @@ function sanitizeSiteOverrides(raw: unknown): Record<string, { theme?: ThemeId; 
 function sanitizeCustomThemes(raw: unknown): CustomTheme[] {
   if (!Array.isArray(raw)) return [];
   const out: CustomTheme[] = [];
+  const seenIds = new Set<string>();
   for (const item of raw.slice(0, MAX_CUSTOM_THEMES)) {
     if (typeof item !== 'object' || item === null) continue;
     const r = item as Record<string, unknown>;
     if (typeof r.id !== 'string' || !r.id.trim()) continue;
+    const id = r.id.trim().slice(0, 64);
+    if (seenIds.has(id)) continue; // duplicate ids would make "active custom theme" ambiguous
     if (typeof r.name !== 'string' || !r.name.trim()) continue;
     const hexRe = /^#[0-9a-fA-F]{6}$/;
     if (typeof r.bg !== 'string' || !hexRe.test(r.bg)) continue;
     if (typeof r.text !== 'string' || !hexRe.test(r.text)) continue;
+    seenIds.add(id);
     out.push({
-      id: r.id,
+      id,
       name: r.name.trim().slice(0, 50),
       bg: r.bg.toLowerCase(),
       bgRaised: typeof r.bgRaised === 'string' && hexRe.test(r.bgRaised) ? r.bgRaised.toLowerCase() : r.bg.toLowerCase(),
@@ -74,7 +102,10 @@ function sanitizeCustomThemes(raw: unknown): CustomTheme[] {
       accent: typeof r.accent === 'string' && hexRe.test(r.accent) ? r.accent.toLowerCase() : '#7ab7ff',
       link: typeof r.link === 'string' && hexRe.test(r.link) ? r.link.toLowerCase() : '#7ab7ff',
       border: typeof r.border === 'string' && hexRe.test(r.border) ? r.border.toLowerCase() : '#2a2d33',
-      createdAt: typeof r.createdAt === 'number' && Number.isFinite(r.createdAt) ? r.createdAt : Date.now(),
+      createdAt:
+        typeof r.createdAt === 'number' && Number.isFinite(r.createdAt) && r.createdAt > 0
+          ? Math.round(r.createdAt)
+          : Date.now(),
     });
   }
   return out;
@@ -83,11 +114,13 @@ function sanitizeCustomThemes(raw: unknown): CustomTheme[] {
 function sanitizeCustomCSS(raw: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return out;
+  let count = 0;
   for (const [k, v] of Object.entries(raw)) {
+    if (count >= MAX_CUSTOM_CSS_SITES) break;
     const host = normalizeHostname(k);
     if (!host || typeof v !== 'string') continue;
     const clean = sanitizeCustomCss(v);
-    if (clean) out[host] = clean;
+    if (clean) { out[host] = clean; count++; }
   }
   return out;
 }
@@ -173,7 +206,18 @@ export function sanitizeSettings(raw: unknown): Settings {
     sepia = warmth;
   }
 
-  const activeCustomThemeId = typeof r.activeCustomThemeId === 'string' && r.activeCustomThemeId.trim() ? r.activeCustomThemeId : null;
+  const customThemes = sanitizeCustomThemes(r.customThemes);
+  const requestedCustomId =
+    typeof r.activeCustomThemeId === 'string' && r.activeCustomThemeId.trim()
+      ? r.activeCustomThemeId.trim().slice(0, 64)
+      : null;
+  // A dangling custom-theme pointer would make the engine silently fall back to a palette called
+  // "custom"; normalise it to a real selection instead.
+  let activeCustomThemeId = requestedCustomId && customThemes.some((t) => t.id === requestedCustomId) ? requestedCustomId : null;
+  if (theme === 'custom' && !activeCustomThemeId) {
+    activeCustomThemeId = customThemes[0]?.id ?? null;
+    if (!activeCustomThemeId) theme = d.theme;
+  }
 
   return {
     schemaVersion: 2,
@@ -190,7 +234,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     siteRules: sanitizeSiteRules(r.siteRules),
     siteThemes: sanitizeSiteThemes(r.siteThemes),
     siteOverrides: sanitizeSiteOverrides(r.siteOverrides),
-    customThemes: sanitizeCustomThemes(r.customThemes),
+    customThemes,
     activeCustomThemeId,
     customCSS: sanitizeCustomCSS(r.customCSS),
     schedule: sanitizeSchedule(r.schedule),
@@ -199,11 +243,15 @@ export function sanitizeSettings(raw: unknown): Settings {
     performance: sanitizePerformance(r.performance),
     developerMode: typeof r.developerMode === 'boolean' ? r.developerMode : d.developerMode,
     compatibility: (() => {
-      const out: Record<string, any> = {};
-      if (typeof r.compatibility === 'object' && r.compatibility !== null && !Array.isArray(r.compatibility)) {
-        for (const [k, v] of Object.entries(r.compatibility as Record<string, unknown>)) {
-          const host = normalizeHostname(k);
-          if (host && ['auto', 'aggressive', 'gentle', 'mediaOnly'].includes(v as string)) out[host] = v;
+      const out: Record<string, CompatibilityMode> = {};
+      if (typeof r.compatibility !== 'object' || r.compatibility === null || Array.isArray(r.compatibility)) return out;
+      let count = 0;
+      for (const [k, v] of Object.entries(r.compatibility as Record<string, unknown>)) {
+        if (count >= MAX_COMPATIBILITY_ENTRIES) break;
+        const host = normalizeHostname(k);
+        if (host && (COMPATIBILITY_MODES as readonly unknown[]).includes(v)) {
+          out[host] = v as CompatibilityMode;
+          count++;
         }
       }
       return out;
@@ -211,7 +259,17 @@ export function sanitizeSettings(raw: unknown): Settings {
   };
 }
 
+let staleContextWarned = false;
+
 export async function loadSettings(): Promise<Settings> {
+  if (!isExtensionContextValid()) {
+    // An orphaned content script (extension reloaded/updated) must not throw on every read.
+    if (!staleContextWarned) {
+      staleContextWarned = true;
+      console.info('[NightLens] Extension context is no longer valid; keeping the page as it is.');
+    }
+    return cloneDefaults();
+  }
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
     return sanitizeSettings(result[STORAGE_KEY]);
@@ -233,6 +291,7 @@ function enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
 /** Read-modify-write. Rejects if storage fails so the UI can show a real error. */
 export function updateSettings(updater: (current: Settings) => Settings): Promise<Settings> {
   return enqueueWrite(async () => {
+    if (!isExtensionContextValid()) throw new Error(STALE_CONTEXT_ERROR);
     const next = sanitizeSettings(updater(await loadSettings()));
     await chrome.storage.local.set({ [STORAGE_KEY]: next });
     return next;
@@ -241,19 +300,35 @@ export function updateSettings(updater: (current: Settings) => Settings): Promis
 
 export function resetSettings(): Promise<Settings> {
   return enqueueWrite(async () => {
+    if (!isExtensionContextValid()) throw new Error(STALE_CONTEXT_ERROR);
     const next = cloneDefaults();
     await chrome.storage.local.set({ [STORAGE_KEY]: next });
     return next;
   });
 }
 
+/** Subscribes to settings changes; returns a no-op unsubscribe when the context is already gone. */
 export function subscribeToSettings(callback: (settings: Settings) => void): () => void {
+  if (!isExtensionContextValid()) return () => undefined;
   const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area !== 'local' || !(STORAGE_KEY in changes)) return;
-    callback(sanitizeSettings(changes[STORAGE_KEY]?.newValue));
+    try {
+      callback(sanitizeSettings(changes[STORAGE_KEY]?.newValue));
+    } catch (error) {
+      // A throwing subscriber must not break the storage event for every other listener.
+      console.warn('[NightLens] Settings subscriber failed.', error);
+    }
   };
-  chrome.storage.onChanged.addListener(listener);
-  return () => chrome.storage.onChanged.removeListener(listener);
+  try {
+    chrome.storage.onChanged.addListener(listener);
+  } catch {
+    return () => undefined;
+  }
+  return () => {
+    try {
+      chrome.storage.onChanged.removeListener(listener);
+    } catch { /* context gone: nothing to remove */ }
+  };
 }
 
 // --- Import / Export ---

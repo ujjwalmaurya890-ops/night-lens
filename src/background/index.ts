@@ -1,4 +1,5 @@
 import { handleCommand, handleInstalled, handleMessage, handleStartup, updateBadge } from './handlers';
+import { isExportSettingsMessage, isGetStorageMessage } from '../shared/messages';
 import { subscribeToSettings } from '../shared/storage';
 
 const report = (error: unknown): void => {
@@ -9,14 +10,10 @@ chrome.runtime.onInstalled.addListener(() => { void handleInstalled().catch(repo
 chrome.runtime.onStartup.addListener(() => { void handleStartup().catch(report); });
 subscribeToSettings((s) => { void updateBadge(s); });
 
-// Message handling for popup/options
+// Only the two request types the extension uses are answered; anything else is ignored so a
+// malformed or unexpected message can never trigger work in the service worker.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (typeof message === 'object' && message !== null) {
-    const m = message as Record<string, unknown>;
-    if (m.type === 'nightlens/get-storage' || m.type === 'nightlens/export-settings') {
-      void handleMessage(message, sender).then(sendResponse).catch(report);
-      return true;
-    }
-  }
-  return false;
+  if (!isGetStorageMessage(message) && !isExportSettingsMessage(message)) return false;
+  void handleMessage(message, sender).then(sendResponse).catch(report);
+  return true;
 });

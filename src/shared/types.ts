@@ -114,12 +114,11 @@ export interface Settings {
   performance: PerformanceSettings;
   developerMode: boolean;
   // Compatibility profiles per site
-  compatibility: Record<string, 'auto' | 'aggressive' | 'gentle' | 'mediaOnly'>;
-  // Per-website custom settings backup
-  backupVersion?: number;
+  compatibility: Record<string, CompatibilityMode>;
 }
 
 export const SITE_STATUSES = ['active', 'globally-off', 'excluded', 'native-dark', 'waiting-for-system', 'scheduled-off'] as const;
 export type SiteStatus = (typeof SITE_STATUSES)[number];
 
-export type CompatibilityMode = 'auto' | 'aggressive' | 'gentle' | 'mediaOnly';
+export const COMPATIBILITY_MODES = ['auto', 'aggressive', 'gentle', 'mediaOnly'] as const;
+export type CompatibilityMode = (typeof COMPATIBILITY_MODES)[number];

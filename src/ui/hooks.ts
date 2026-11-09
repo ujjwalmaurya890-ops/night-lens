@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloneDefaults } from '../shared/defaults';
-import { STATUS_CHANGED, GET_STATUS, isStatusChangedMessage, isStatusPayload, type StatusPayload } from '../shared/messages';
+import { STATUS_CHANGED, GET_STATUS, isDebugInfoMessage, isStatusChangedMessage, isStatusPayload, type StatusPayload } from '../shared/messages';
 import { loadSettings, resetSettings, subscribeToSettings, updateSettings } from '../shared/storage';
 import type { Settings } from '../shared/types';
 
@@ -94,9 +94,8 @@ export function useSiteStats() {
   const [stats, setStats] = useState<{ elementsProcessed: number; rules: number } | null>(null);
   useEffect(() => {
     const listener = (message: unknown) => {
-      if (typeof message === 'object' && message !== null && (message as any).type === 'nightlens/debug-info') {
-        const d = message as any;
-        setStats({ elementsProcessed: d.stats?.processed ?? 0, rules: d.stats?.rules ?? 0 });
+      if (isDebugInfoMessage(message)) {
+        setStats({ elementsProcessed: message.processed, rules: message.rules });
       }
     };
     chrome.runtime.onMessage.addListener(listener);

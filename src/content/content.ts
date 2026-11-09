@@ -3,8 +3,11 @@ import { buildTokens } from '../engine/palette';
 import { decide, getEffectiveSettings } from '../shared/decision';
 import { sanitizeCustomCss } from '../shared/css';
 import { getSiteEntry, normalizeHostname } from '../shared/hostname';
-import { STATUS_CHANGED, isGetStatusMessage, type StatusChangedMessage, type StatusPayload } from '../shared/messages';
-import { loadSettings, subscribeToSettings } from '../shared/storage';
+import {
+  DEBUG_INFO, STATUS_CHANGED, isGetDebugMessage, isGetStatusMessage,
+  type DebugInfoMessage, type StatusChangedMessage, type StatusPayload,
+} from '../shared/messages';
+import { isExtensionContextValid, loadSettings, subscribeToSettings } from '../shared/storage';
 import { cloneDefaults } from '../shared/defaults';
 import type { Settings, SiteStatus } from '../shared/types';
 
@@ -32,12 +35,24 @@ export function startContentScript(): () => void {
   let siteMode: StatusPayload['siteMode'] = null;
 
   const payload = (): StatusPayload => ({ hostname: getSiteHostname(), status: siteStatus, siteMode });
+  const buildTokensSafe = (): ReturnType<typeof buildTokens> => {
+    try {
+      return buildTokens(getEffectiveSettings(settings, getSiteHostname()));
+    } catch {
+      return buildTokens(cloneDefaults());
+    }
+  };
   const setStatus = (status: SiteStatus): void => {
     if (status === siteStatus) return;
     siteStatus = status;
     if (!isTop || disposed) return;
+    // After an extension update the old content script keeps running with a dead runtime;
+    // sendMessage would throw "Extension context invalidated".
+    if (!isExtensionContextValid()) return;
     const message: StatusChangedMessage = { type: STATUS_CHANGED, ...payload() };
-    chrome.runtime.sendMessage(message).catch(() => undefined);
+    try {
+      void chrome.runtime.sendMessage(message).catch(() => undefined);
+    } catch { /* context went away between the check and the call */ }
   };
 
   const engine = new ThemeEngine(document, window, {
@@ -49,6 +64,20 @@ export function startContentScript(): () => void {
 
   const apply = (): void => {
     if (!loaded || disposed) return;
+    if (!isExtensionContextValid()) {
+      // The extension was reloaded/updated/removed: leave the page clean instead of half-themed.
+      dispose();
+      return;
+    }
+    try {
+      applyNow();
+    } catch (error) {
+      // Never let one unexpected page value break the content script for the whole document.
+      if (settings.developerMode) console.warn('[NightLens] Failed to apply theme.', error);
+    }
+  };
+
+  const applyNow = (): void => {
     const hostname = getSiteHostname();
     const effective = getEffectiveSettings(settings, hostname);
     const decision = decide(effective, hostname, darkQuery.matches);
@@ -89,6 +118,7 @@ export function startContentScript(): () => void {
     };
 
     if (engine.isRunning) engine.update(config); else engine.start(config);
+    syncScheduleTimer();
   };
 
   const onVisibilityChange = (): void => {
@@ -100,14 +130,22 @@ export function startContentScript(): () => void {
       sendResponse(payload());
       return false;
     }
-    if ((message as Record<string, unknown>).type === 'nightlens/get-debug' && isTop) {
-      chrome.runtime.sendMessage({
-        type: 'nightlens/debug-info',
+    if (isGetDebugMessage(message) && isTop) {
+      // Deliberately excludes settings and site rules: diagnostics need counters, not configuration.
+      const stats = engine.getStats();
+      const info: DebugInfoMessage = {
+        type: DEBUG_INFO,
         hostname: getSiteHostname(),
-        settings,
-        engineRunning: engine.isRunning,
-        stats: engine.getStats(),
-      }).catch(() => undefined);
+        running: engine.isRunning,
+        preset: engine.isRunning ? buildTokensSafe().preset : 'idle',
+        processed: stats.processed,
+        rules: stats.rules,
+        duration: Math.round(stats.duration),
+        cacheHit: stats.cacheHit,
+      };
+      try {
+        void chrome.runtime.sendMessage(info).catch(() => undefined);
+      } catch { /* context invalidated */ }
     }
     return false;
   };
@@ -116,15 +154,27 @@ export function startContentScript(): () => void {
     if (!event.persisted) dispose();
   };
   const unsubscribe = subscribeToSettings((s) => { settings = s; apply(); });
-  const scheduleTimer = window.setInterval(() => {
-    if (settings.schedule.enabled && !document.hidden) apply();
-  }, 60_000);
+
+  // Only keep a 60s ticker alive while a schedule exists; otherwise it wakes the page for nothing.
+  let scheduleTimer: number | null = null;
+  const syncScheduleTimer = (): void => {
+    const needed = settings.schedule.enabled && !disposed;
+    if (needed && scheduleTimer === null) {
+      scheduleTimer = window.setInterval(() => {
+        if (!document.hidden) apply();
+      }, 60_000);
+    } else if (!needed && scheduleTimer !== null) {
+      window.clearInterval(scheduleTimer);
+      scheduleTimer = null;
+    }
+  };
 
   function dispose(): void {
     if (disposed) return;
     disposed = true;
     unsubscribe();
-    window.clearInterval(scheduleTimer);
+    if (scheduleTimer !== null) window.clearInterval(scheduleTimer);
+    scheduleTimer = null;
     darkQuery.removeEventListener('change', apply);
     motionQuery.removeEventListener('change', apply);
     document.removeEventListener('visibilitychange', onVisibilityChange);
