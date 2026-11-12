@@ -13,7 +13,7 @@ npm test
 npm run build
 ```
 
-Load `dist/` through `chrome://extensions` → **Developer mode** → **Load unpacked**. Reload both the extension and test tabs after changes.
+Build the target you are testing (`npm run build:chrome`, `npm run build:firefox`, …) and load `dist/<target>` through the browser's extensions page → **Developer mode** → **Load unpacked**. Reload both the extension and test tabs after changes. Browser-specific code belongs in `src/adapters/browser/`; `tests/unit/architecture.test.ts` enforces that.
 
 For browser automation, install Chromium once with `npx playwright install chromium`, then run `npm run test:e2e`. Set `NIGHTLENS_CHROMIUM` if you need a specific browser executable.
 
@@ -29,7 +29,7 @@ message are in the [development guide](docs/DEVELOPMENT.md).
    test that fails without the fix.
 4. Update documentation when behavior, permissions, shortcuts, storage, or limitations change, and
    add a `CHANGELOG.md` entry under **Unreleased**.
-5. Check `git diff` for generated files (`dist/`, `nightlens.zip`, `test-results/`), credentials,
+5. Check `git diff` for generated files (`dist/`, `artifacts/`, `test-results/`), credentials,
    personal data, and unrelated edits.
 
 ## Design constraints

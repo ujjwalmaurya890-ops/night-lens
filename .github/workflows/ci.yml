@@ -45,24 +45,22 @@ jobs:
       - name: Unit and integration tests
         run: npm test
 
-      - name: Production build
+      - name: Build every browser target
         run: npm run build
 
-      - name: Verify the built manifest is minimal
-        run: |
-          node -e '
-            const m = require("./dist/manifest.json");
-            if (m.manifest_version !== 3) throw new Error("expected Manifest V3");
-            if (JSON.stringify(m.permissions) !== JSON.stringify(["storage"])) throw new Error("unexpected permissions: " + JSON.stringify(m.permissions));
-            if ((m.host_permissions ?? []).length !== 0) throw new Error("host permissions must stay empty");
-            console.log("manifest OK:", JSON.stringify({ permissions: m.permissions, host_permissions: m.host_permissions }));
-          '
+      - name: Verify every built extension
+        run: npm run verify:build
 
-      - name: Upload extension bundle
+      - name: Package store archives
+        run: npm run package
+
+      - name: Upload extension bundles
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: nightlens-dist
-          path: dist/
+          path: |
+            dist/
+            artifacts/
           retention-days: 14
           if-no-files-found: error
 
@@ -76,10 +74,45 @@ jobs:
             echo "|---|---|"
             echo "| Type check | ${{ job.status }} |"
             echo "| Unit/integration tests | ${{ job.status }} |"
-            echo "| Production build | ${{ job.status }} |"
+            echo "| Production builds (6 targets) | ${{ job.status }} |"
             echo ""
+            echo "Each target is also built in isolation by the \`targets\` job."
             echo "Browser tests run in the \`e2e\` job."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  targets:
+    name: Isolated build (${{ matrix.target }})
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [chrome, edge, brave, opera, firefox, safari]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies (lockfile only)
+        run: npm ci
+
+      # Proves each target builds on its own, not only as part of `npm run build`.
+      - name: Build ${{ matrix.target }}
+        run: npm run build:${{ matrix.target }}
+
+      - name: Verify ${{ matrix.target }}
+        run: node scripts/verify-build.mjs --target ${{ matrix.target }}
+
+      - name: Package ${{ matrix.target }}
+        run: npm run package:${{ matrix.target }}
 
   e2e:
     name: Browser tests (Chromium + extension)

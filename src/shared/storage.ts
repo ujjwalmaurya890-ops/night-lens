@@ -3,6 +3,7 @@ import {
   MAX_COMPATIBILITY_ENTRIES, MAX_CUSTOM_CSS_SITES, MAX_CUSTOM_THEMES, MAX_SITE_OVERRIDES,
   MAX_SITE_RULES, MAX_SITE_THEMES, STORAGE_KEY, cloneDefaults, migrateLegacySettings,
 } from './defaults';
+import { getBrowserApi } from '../adapters/browser';
 import { sanitizeCustomCss } from './css';
 import { normalizeHostname } from './hostname';
 import {
@@ -10,11 +11,12 @@ import {
   type PerformanceSettings, type ReadingModeSettings, type ScheduleSettings, type Settings,
   type SiteMode, type SiteRules, type SiteOverride, type ThemeId,
 } from './types';
+import type { StorageChange } from '../adapters/browser';
 
 /** True while this script's extension context is still alive (false after reload/update/removal). */
 export function isExtensionContextValid(): boolean {
   try {
-    return typeof chrome !== 'undefined' && typeof chrome.runtime?.id === 'string' && chrome.runtime.id !== '';
+    return getBrowserApi().runtime.isAvailable();
   } catch {
     return false;
   }
@@ -271,9 +273,11 @@ export async function loadSettings(): Promise<Settings> {
     return cloneDefaults();
   }
   try {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
+    const result = await getBrowserApi().storage.get(STORAGE_KEY);
     return sanitizeSettings(result[STORAGE_KEY]);
   } catch (error) {
+    // Storage can be unavailable (a browser without the API) or broken (quota, corrupted profile).
+    // Defaults keep the page usable and the console names the failing API.
     console.warn('[NightLens] Could not read settings; using defaults.', error);
     return cloneDefaults();
   }
@@ -293,24 +297,25 @@ export function updateSettings(updater: (current: Settings) => Settings): Promis
   return enqueueWrite(async () => {
     if (!isExtensionContextValid()) throw new Error(STALE_CONTEXT_ERROR);
     const next = sanitizeSettings(updater(await loadSettings()));
-    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    await getBrowserApi().storage.set({ [STORAGE_KEY]: next });
     return next;
   });
 }
 
 /**
  * Seeds defaults only when the key is absent, with the check and the write serialised against
- * every other writer. `chrome.runtime.onInstalled` fires on a fresh profile while other surfaces
+ * every other writer. The browser's install event fires on a fresh profile while other surfaces
  * may already be writing; an unconditional reset there would discard those writes (and, in the
  * browser suite, silently reverted per-site rules the test had just stored).
  */
 export function ensureSettings(): Promise<Settings> {
   return enqueueWrite(async () => {
     if (!isExtensionContextValid()) throw new Error(STALE_CONTEXT_ERROR);
-    const existing = (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY];
+    const storage = getBrowserApi().storage;
+    const existing = (await storage.get(STORAGE_KEY))[STORAGE_KEY];
     if (existing !== undefined) return sanitizeSettings(existing);
     const next = cloneDefaults();
-    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    await storage.set({ [STORAGE_KEY]: next });
     return next;
   });
 }
@@ -319,7 +324,7 @@ export function resetSettings(): Promise<Settings> {
   return enqueueWrite(async () => {
     if (!isExtensionContextValid()) throw new Error(STALE_CONTEXT_ERROR);
     const next = cloneDefaults();
-    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    await getBrowserApi().storage.set({ [STORAGE_KEY]: next });
     return next;
   });
 }
@@ -327,7 +332,7 @@ export function resetSettings(): Promise<Settings> {
 /** Subscribes to settings changes; returns a no-op unsubscribe when the context is already gone. */
 export function subscribeToSettings(callback: (settings: Settings) => void): () => void {
   if (!isExtensionContextValid()) return () => undefined;
-  const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+  const listener = (changes: Record<string, StorageChange>, area: string) => {
     if (area !== 'local' || !(STORAGE_KEY in changes)) return;
     try {
       callback(sanitizeSettings(changes[STORAGE_KEY]?.newValue));
@@ -337,15 +342,10 @@ export function subscribeToSettings(callback: (settings: Settings) => void): () 
     }
   };
   try {
-    chrome.storage.onChanged.addListener(listener);
+    return getBrowserApi().storage.onChanged(listener);
   } catch {
     return () => undefined;
   }
-  return () => {
-    try {
-      chrome.storage.onChanged.removeListener(listener);
-    } catch { /* context gone: nothing to remove */ }
-  };
 }
 
 // --- Import / Export ---

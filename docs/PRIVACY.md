@@ -3,7 +3,9 @@
 NightLens is designed so that its privacy claims can be checked against its code. This document
 states exactly what is stored, what is processed, and what is never done. The same invariants are
 enforced by `tests/unit/privacy.test.ts`, which fails if the source starts using network APIs,
-browser storage outside `chrome.storage.local`, tracking dependencies, or wider permissions.
+any storage area other than the local one (`chrome.storage.local` on Chromium,
+`browser.storage.local` on Firefox and Safari), tracking dependencies, wider permissions, or a
+manifest that asks for more than `storage`.
 
 ## Summary
 
@@ -11,7 +13,7 @@ browser storage outside `chrome.storage.local`, tracking dependencies, or wider 
 |---|---|
 | Does NightLens send data anywhere? | **No.** There is no network code in the extension: no `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon`, or remote script loading. |
 | Does it collect browsing history? | **No.** The active hostname is read from the page to apply per-site rules and is never recorded. |
-| What is stored? | One settings object in `chrome.storage.local` under the key `nightlens:settings`. |
+| What is stored? | One settings object in extension local storage (`chrome.storage.local` / `browser.storage.local`) under the key `nightlens:settings`. |
 | Where does it live? | In your browser profile, on your device. It is not synced by NightLens. |
 | Is anything sent to a server? | **No.** There is no analytics, telemetry, crash reporting, remote configuration, or A/B testing. |
 | Can it read my page content? | The content script reads computed colour values (background, text, border, gradient, shadow) to compute a dark equivalent. It does not read passwords, form values, or page text, and it does not transmit anything. |
@@ -19,7 +21,8 @@ browser storage outside `chrome.storage.local`, tracking dependencies, or wider 
 
 ## What is stored
 
-`chrome.storage.local["nightlens:settings"]` contains a single JSON object:
+Local extension storage under `nightlens:settings` (`chrome.storage.local` on Chromium,
+`browser.storage.local` on Firefox and Safari) contains a single JSON object:
 
 - **Appearance:** theme id, brightness, contrast, warmth (legacy `sepia` alias), saturation, text
   size, accent hue, font preference.

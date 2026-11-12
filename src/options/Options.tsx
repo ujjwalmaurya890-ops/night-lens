@@ -1,9 +1,10 @@
 import { useRef, useState, type ComponentType, type FormEvent, type KeyboardEvent } from 'react';
 import type { LucideProps } from 'lucide-react';
+import { getBrowserApi } from '../adapters/browser';
 import { MAX_SITE_RULES } from '../shared/defaults';
 import { hostnameFromUserInput } from '../shared/hostname';
 import { exportSettings, validateImport } from '../shared/storage';
-import { Logo, StatusLine, Switch } from '../ui/components';
+import { EnvironmentNotice, HostAccessNotice, Logo, StatusLine, Switch } from '../ui/components';
 import { useSettings } from '../ui/hooks';
 import {
   IconClock,
@@ -94,7 +95,7 @@ export function Options() {
     a.localeCompare(b),
   );
 
-  const version = chrome.runtime.getManifest?.()?.version ?? '1.0.0';
+  const version = getBrowserApi().runtime.getManifest()?.version ?? '1.0.0';
 
   const addExcluded = (e: FormEvent) => {
     e.preventDefault();
@@ -256,6 +257,8 @@ export function Options() {
             {TABS.find((entry) => entry.id === tab)?.label} settings
           </div>
           <div key={tab} className="stack-xl panel-enter">
+            <EnvironmentNotice />
+            <HostAccessNotice />
             {tab === 'overview' && (
               <OverviewTab
                 settings={settings}

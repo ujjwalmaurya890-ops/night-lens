@@ -1,10 +1,10 @@
 # NightLens
 
-**Intelligent, customizable dark mode for Chromium — locally processed and privacy-first.**
+**Intelligent, customizable dark mode for Chrome, Edge, Brave, Opera, Firefox and Safari — locally processed and privacy-first.**
 
-NightLens is a Manifest V3 browser extension that remaps light page colors to readable dark palettes. It uses computed styles and contrast-aware color mapping rather than blindly inverting the page. Photographs, videos, canvases, and large illustrations receive special handling.
+NightLens is a Manifest V3 browser extension that remaps light page colors to readable dark palettes on six browser builds from one shared engine. It uses computed styles and contrast-aware color mapping rather than blindly inverting the page. Photographs, videos, canvases, and large illustrations receive special handling.
 
-Built with **TypeScript, React, Vite, Vitest, and Playwright**.
+Built with **TypeScript, React, Vite, Vitest, and Playwright**. One engine, six manifests, no runtime dependencies added for cross-browser support.
 
 ## Features
 
@@ -49,30 +49,45 @@ Custom themes can be created, edited, imported, and exported. Full settings back
 
 - Keyboard-navigable popup/options UI with semantic controls, accessible names, live status messages, visible focus, arrow-key section navigation, and a skip link to the settings content.
 - High-contrast mode, link underlining, and reduced-motion support (including the OS preference).
-- **`Alt+Shift+D`** toggles NightLens globally. Rebind it at `chrome://extensions/shortcuts` where supported.
+- **`Alt+Shift+D`** toggles NightLens globally. Rebind it on the browser's own shortcuts page (linked from the popup); Safari does not expose rebinding.
 - Optional schedules, system appearance integration, reading mode, and local developer diagnostics.
 
 ### Privacy
 
-Settings stay in `chrome.storage.local` under `nightlens:settings`. NightLens has no analytics, tracking, remote configuration, or browsing-history collection. Computed page colors remain in memory.
+Settings stay in extension local storage (`chrome.storage.local` / `browser.storage.local`) under `nightlens:settings`. NightLens has no analytics, tracking, remote configuration, or browsing-history collection. Computed page colors remain in memory.
 
-The only requested extension permission is **`storage`**. HTTP/HTTPS content-script access is required to restyle pages. No `tabs`, `history`, `cookies`, `webRequest`, host permissions, remote scripts, or externally connectable messaging are requested. See [Security & Privacy](docs/SECURITY_AND_PRIVACY.md).
+The only requested extension permission is **`storage`**. HTTP/HTTPS content-script access is required to restyle pages; the Firefox and Safari builds declare it as `host_permissions` because those engines treat host access as an explicit, revocable grant, while the Chromium builds declare none. No `tabs`, `history`, `cookies`, `webRequest`, remote scripts, or externally connectable messaging is requested on any browser. See [Security & Privacy](docs/SECURITY_AND_PRIVACY.md).
+
+## Browser support
+
+| Browser | Build | Status |
+|---|---|---|
+| Chrome, Edge, Brave, Opera, Opera GX, Vivaldi | `npm run build:chrome` / `:edge` / `:brave` / `:opera` | Prepared; Chromium E2E suite runs in CI |
+| Firefox (incl. Developer Edition, Nightly) | `npm run build:firefox` | Prepared; adapter + manifest verified, manual browser test required |
+| Safari 16.4+ (macOS) | `npm run build:safari` → Xcode converter | Prepared; requires macOS + Xcode |
+
+"Prepared" means built and statically verified, not installed on a real browser in this environment.
+The honest per-browser breakdown is in [Browser compatibility](docs/BROWSER_COMPATIBILITY.md).
 
 ## Install for development
 
-Requirements: **Node.js 22.12+** and a Chromium-based browser.
+Requirements: **Node.js 22.12+**.
 
 ```bash
 npm ci
-npm run build
+npm run build          # all six targets, or: npm run build:chrome
 ```
 
-1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Choose **Load unpacked** and select the repository's `dist/` directory.
+1. Open `chrome://extensions` (Chromium), `about:debugging#/runtime/this-firefox` (Firefox), or run
+   the Xcode converter (Safari).
+2. Enable developer mode / load unpacked.
+3. Select `dist/chrome`, `dist/edge`, `dist/brave`, `dist/opera` or `dist/firefox` — each target has
+   its own generated `manifest.json`.
 4. Reload existing tabs after installing or updating the extension.
 
-For Windows details and troubleshooting, see [Installation](docs/INSTALL.md).
+Per-browser steps: [Chrome](docs/INSTALL.md) · [Edge](docs/EDGE_INSTALL.md) ·
+[Brave](docs/BRAVE_INSTALL.md) · [Firefox](docs/FIREFOX_INSTALL.md) ·
+[Safari](docs/SAFARI_INSTALL.md).
 
 ## Use NightLens
 
@@ -96,9 +111,11 @@ Additional fixture screenshots are in [`docs/screenshots/`](docs/screenshots/). 
 | Check | Result in this repository |
 |---|---|
 | `npm run typecheck` | Pass — strict TypeScript, no errors |
-| `npm test` | Pass — 704 Vitest tests across 15 files (engine, colour, storage, UI, accessibility, security, privacy invariants) |
-| `npm run build` | Pass — Manifest V3 bundle in `dist/` |
-| `npm run test:e2e` | Pass in CI — 42 Playwright tests in real Chromium with the extension loaded, [run 42561937603](https://github.com/ujjwalmaurya890-ops/night-lens/actions/runs/42561937603) |
+| `npm test` | Pass — 749 Vitest tests across 19 files (engine, colour, storage, adapters, manifests, architecture, UI, accessibility, security, privacy invariants) |
+| `npm run build` | Pass — six Manifest V3 targets in `dist/<target>/` |
+| `npm run verify:build` | Pass — every target's manifest, referenced files and bundles |
+| `npm run package` | Pass — six store archives in `artifacts/` |
+| `npm run test:e2e` | Not executed in the producing environment (Playwright browser download blocked); runs in CI |
 
 Claims in this README are limited to what those checks demonstrate. Per-site behaviour on live
 websites is heuristic; see [Known limitations](docs/LIMITATIONS.md).
@@ -109,17 +126,24 @@ websites is heuristic; see [Known limitations](docs/LIMITATIONS.md).
 |---|---|
 | `npm run typecheck` | Strict TypeScript checking |
 | `npm test` | Vitest unit/integration tests in jsdom |
-| `npm run build` | Production extension in `dist/` |
+| `npm run build` | All six production builds in `dist/<target>/` |
+| `npm run build:chrome` | Chrome build only (`:edge`, `:brave`, `:opera`, `:firefox`, `:safari`) |
+| `npm run verify:build` | Validate every built target (manifests, files, bundles) |
+| `npm run package` | Store-ready ZIPs in `artifacts/` |
 | `npx playwright install chromium` | Install the browser used by E2E tests |
-| `npm run test:e2e` | Build and test the real extension in Chromium |
-| `npm run verify` | Type-check, unit tests, and E2E tests |
+| `npm run test:e2e` | Build Chrome and run the real-browser suite |
+| `npm run verify` | Type-check, unit tests, all builds, build verification, E2E |
+| `npm run safari:project` | macOS only: wrap the Safari build in an Xcode project |
 
-Set `NIGHTLENS_CHROMIUM=/path/to/chrome` to use a particular executable. E2E tests require a Chromium version that supports Manifest V3 extension loading. Actual results and unverified checks are recorded in [Test report](docs/TEST_REPORT.md) and [Limitations](docs/LIMITATIONS.md).
+Set `NIGHTLENS_CHROMIUM=/path/to/chrome` and `NIGHTLENS_TARGET=edge|brave|opera` to run the E2E suite
+against another Chromium-family build. Build and install details are in
+[BUILD.md](docs/BUILD.md). Actual results and unverified checks are recorded in
+[TESTING.md](docs/TESTING.md) and [Limitations](docs/LIMITATIONS.md).
 
 ## Architecture
 
 ```text
-Popup / Options ── writes ──> chrome.storage.local
+Popup / Options ── writes ──> extension local storage
                                   │ onChanged
                                   ▼
 HTTP/HTTPS content script ──> decision + ThemeEngine
@@ -133,7 +157,7 @@ Validated status messages ──> Popup
 MV3 service worker: Alt+Shift+D, install/startup badge, validated messages
 ```
 
-Source is organized into `src/engine/`, `src/content/`, `src/background/`, `src/shared/`, `src/popup/`, `src/options/`, and `src/ui/`. See [Architecture](docs/ARCHITECTURE.md).
+Source is organized into `src/adapters/browser/` (the only place that touches browser APIs), `src/engine/`, `src/content/`, `src/background/`, `src/shared/`, `src/popup/`, `src/options/`, and `src/ui/`; `manifests/` holds the per-browser manifest sources. See [Architecture](docs/ARCHITECTURE.md).
 
 ## Contributing
 
@@ -143,7 +167,11 @@ NightLens is available under the [MIT License](LICENSE).
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) — runtime model, module map, theming pass
+- [Architecture](docs/ARCHITECTURE.md) — runtime model, adapter layer, build pipeline, theming pass
+- [Browser compatibility](docs/BROWSER_COMPATIBILITY.md) — per-browser status, engine differences, limitations
+- [Build system](docs/BUILD.md) · [Testing](docs/TESTING.md) · [Release guide](docs/RELEASE_GUIDE.md)
+- [Firefox install](docs/FIREFOX_INSTALL.md) · [Safari install](docs/SAFARI_INSTALL.md) ·
+  [Edge install](docs/EDGE_INSTALL.md) · [Brave install](docs/BRAVE_INSTALL.md)
 - [Development guide](docs/DEVELOPMENT.md) — setup, commands, adding themes/messages, testing rules
 - [Installation](docs/INSTALL.md)
 - [Privacy](docs/PRIVACY.md) — what is stored, what is processed, why each permission exists

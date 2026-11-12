@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { getBrowserApi } from '../../adapters/browser';
 import { PREMIUM_THEME_META } from '../../engine/palette';
 import type { Settings, ThemeId } from '../../shared/types';
 import {
@@ -24,6 +25,7 @@ import {
   IconUpload,
   IconZap,
 } from '../../ui/icons';
+import { browserCopy } from '../../ui/copy';
 
 interface BaseSystemTabProps {
   settings: Settings;
@@ -531,7 +533,7 @@ export function PrivacyTab({
 
       <SectionCard icon={<IconLock size={15} />} title="What Is Stored Locally">
         <p className="body-copy">
-          Only your explicit preferences in <code>chrome.storage.local</code> under key{' '}
+          Only your explicit preferences in <code>{browserCopy().storageNamespace}</code> under key{' '}
           <code>nightlens:settings</code>, automatically removed if you uninstall the
           extension:
         </p>
@@ -637,6 +639,7 @@ export function PrivacyTab({
 }
 
 export function AboutTab({ version }: { version: string }) {
+  const info = getBrowserApi().info;
   return (
     <>
       <div className="card about-hero stack">
@@ -654,8 +657,9 @@ export function AboutTab({ version }: { version: string }) {
           style={{ justifyContent: 'center', flexWrap: 'wrap', gap: 6 }}
         >
           <span className="badge badge-active">v{version}</span>
-          <span className="badge badge-idle">Manifest V3</span>
+          <span className="badge badge-idle">Manifest V{info.manifestVersion ?? 3}</span>
           <span className="badge badge-off">Privacy-first</span>
+          <span className="badge badge-off">{info.label}</span>
           <span className="badge badge-off">React 19 · TypeScript</span>
         </div>
       </div>
@@ -699,7 +703,7 @@ export function AboutTab({ version }: { version: string }) {
           <kbd className="kbd">Alt+Shift+D</kbd>
         </div>
         <p className="field-hint">
-          Customize shortcuts anytime at <code>chrome://extensions/shortcuts</code>.
+          Customize shortcuts anytime at <code>{browserCopy().shortcutsLocation}</code>.
         </p>
       </SectionCard>
 

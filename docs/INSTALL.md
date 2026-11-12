@@ -1,111 +1,135 @@
-# Install, Build, Load, Debug, Update
+# Install NightLens
+
+NightLens builds one extension per browser. Pick your browser below; every command assumes you are
+in the repository root.
+
+```bash
+npm install
+```
+
+| Browser | Build | Load from |
+|---|---|---|
+| Chrome | `npm run build:chrome` | `dist/chrome` |
+| Edge | `npm run build:edge` | `dist/edge` |
+| Brave | `npm run build:brave` | `dist/brave` |
+| Opera / Opera GX | `npm run build:opera` | `dist/opera` |
+| Vivaldi | `npm run build:chrome` | `dist/chrome` |
+| Firefox | `npm run build:firefox` | `dist/firefox` (temporary add-on) |
+| Safari | `npm run build:safari` | convert with Xcode first - see [SAFARI_INSTALL.md](SAFARI_INSTALL.md) |
+
+`npm run build` produces all six at once. Detailed per-browser steps:
+
+- [Chrome](#google-chrome) · [Edge](EDGE_INSTALL.md) · [Brave](BRAVE_INSTALL.md) ·
+  [Opera](#opera--opera-gx) · [Firefox](FIREFOX_INSTALL.md) · [Safari](SAFARI_INSTALL.md)
+
+## Google Chrome
+
+1. `npm run build:chrome`
+2. Open `chrome://extensions`
+3. Turn on **Developer mode** (top right)
+4. **Load unpacked** → select `dist/chrome`
+5. Pin NightLens (puzzle-piece icon → pin)
+6. Open any `http`/`https` page. Dark mode applies if it is enabled and the site is not excluded.
+
+After changing code: `npm run build:chrome`, then **Reload** (↻) on the NightLens card and reload
+open tabs (an old content script cannot reconnect to a reloaded extension).
+
+## Microsoft Edge
+
+See [EDGE_INSTALL.md](EDGE_INSTALL.md). Short version: `edge://extensions` → **Developer mode** →
+**Load unpacked** → `dist/edge`.
+
+## Brave
+
+See [BRAVE_INSTALL.md](BRAVE_INSTALL.md). Short version: `brave://extensions` → **Developer mode**
+→ **Load unpacked** → `dist/brave`.
+
+## Opera / Opera GX
+
+1. `npm run build:opera`
+2. Go to `opera://extensions` (works the same in Opera GX)
+3. Enable **Developer mode**
+4. **Load unpacked** → select `dist/opera`
+
+Opera asks for confirmation on start-up for unpacked extensions; allow it. Opera's manifest key
+`minimum_opera_version` is set to 95 in `manifests/opera.json`.
+
+## Vivaldi and other Chromium forks
+
+Vivaldi, Arc, SigmaOS and similar forks use the Chromium build:
+
+1. `npm run build:chrome`
+2. Open the fork's extensions page (`vivaldi://extensions`) and load `dist/chrome` unpacked.
+
+These forks are *expected* to work but have not been tested here - see
+[BROWSER_COMPATIBILITY.md](BROWSER_COMPATIBILITY.md).
+
+## Mozilla Firefox
+
+See [FIREFOX_INSTALL.md](FIREFOX_INSTALL.md). Short version: `about:debugging#/runtime/this-firefox`
+→ **Load Temporary Add-on…** → `dist/firefox/manifest.json`. A permanent install requires a signed
+XPI (`web-ext sign`), which needs an AMO account.
+
+## Apple Safari
+
+See [SAFARI_INSTALL.md](SAFARI_INSTALL.md). Safari requires macOS, Xcode and Apple's
+`safari-web-extension-converter`; `dist/safari/browser-extension` is the converter's input, not an
+installable extension.
 
 ## Requirements
 
-- **Node ≥ 22.12** (developed on 22.22.2, check `node -v`) — Vite 8 requires modern Node. Use [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm) if needed.
-- **Chrome/Chromium ≥ 141** (Edge/Brave should work; Firefox not verified).
+- **Node ≥ 22.12** (Vite 8 requires a modern Node). Check with `node -v`.
+- No global build tools.
 
-## Windows Setup
+## Windows notes
 
-1. **Install Node:**
-   - Via [nodejs.org](https://nodejs.org) LTS installer, or
-   - `winget install OpenJS.NodeJS.LTS` (Windows Package Manager), or
-   - `choco install nodejs` (Chocolatey)
-   - Verify: open **PowerShell** or **CMD** and run `node -v` and `npm -v`.
-
-2. **Clone & Build:**
-   ```powershell
-   git clone <repo-url>
-   cd night-lens
-   npm install
-   npm run build
-   ```
-
-3. **Load in Chrome:**
-   - Open `chrome://extensions`
-   - Enable **Developer mode** (top right)
-   - Click **Load unpacked** → select the `dist/` folder inside the project.
-
-4. **If `npm run build` fails with "tsc not found":**
-   ```powershell
-   npm install
-   ```
-
-5. **PowerShell execution policy** (if script blocked):
-   ```powershell
-   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-   ```
-
-## macOS / Linux
-
-```bash
-git clone <repo-url>
-cd night-lens
-npm install
-npm run build
-# Chrome → chrome://extensions → Developer mode → Load unpacked → dist/
-```
-
-## Build Commands
-
-| Command | What it does |
-|---|---|
-| `npm install` | Install deps (React only for UI; content script has none) |
-| `npm run build` | Bundles popup/settings (Vite multi-page, minified) + content.js/background.js (IIFE) + manifest (version from package.json) + icons → `dist/` |
-| `npm run typecheck` | `tsc --noEmit` strict (noUnusedLocals, etc.) |
-| `npm test` | Unit/integration tests (Vitest + jsdom) |
-| `npm run test:e2e` | Rebuilds, then ~40 E2E in real Chromium with extension loaded (Playwright) |
-| `npm run verify` | typecheck + test + test:e2e |
-
-## Load Unpacked (Chrome)
-
-1. `chrome://extensions` → Developer mode ON
-2. **Load unpacked** → select `dist/` (must contain `manifest.json`)
-3. Pin NightLens (puzzle icon → pin)
-4. Open any `http/https` page — dark mode applies if enabled and not excluded.
-5. **After updating code:** `npm run build` → Extensions page → **Reload** (↻) on NightLens card. Reload open tabs (or close/reopen) — old content scripts orphan until reload.
-
-## Debugging
-
-- **Popup console:** Right-click NightLens icon → Inspect popup.
-- **Options console:** Open settings → F12.
-- **Content script console:** F12 on any web page → filter `[NightLens]`.
-- **Service worker:** `chrome://extensions` → NightLens → **Service worker** (inspect) → check `chrome.storage.local`.
-- **Check storage:** DevTools → Application → Storage → Extension Storage.
-- **Logs when developerMode on:** Enable in Settings → Performance → Developer Mode → open page console for `[NightLens] Engine stats`.
+- Use PowerShell or Terminal; `npm install` once per checkout.
+- Paths with spaces are fine, but copy the exact folder: `dist\chrome`, `dist\edge`,
+  `dist\brave`, `dist\opera`.
+- If PowerShell blocks `npm.ps1`: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+- To load Firefox builds on Windows, `about:debugging` → **Load Temporary Add-on…** → choose
+  `dist\firefox\manifest.json`.
 
 ## Updating
 
 ```bash
 git pull
-npm install   # if package.json changed
-npm run build
-# chrome://extensions → Reload on NightLens
-# Reload tabs
+npm install        # only if package.json changed
+npm run build      # or build:<target>
 ```
+
+Then reload the extension in the browser's extensions page and reload the tabs you are testing.
+
+## Verify the installation
+
+1. The NightLens toolbar icon opens the popup with a **Current website** card.
+2. On a light page the popup shows **Active** and the page turns dark.
+3. Toggling the global switch writes immediately; the change also reaches already-open tabs.
+4. Settings → About shows the NightLens version and the browser it detected.
+5. Disable NightLens and the page returns to its original appearance.
+
+## Debugging
+
+| Surface | How to open it |
+|---|---|
+| Popup console | Right-click the NightLens icon → **Inspect popup** |
+| Options console | Open the settings page → F12 |
+| Content script | F12 on a web page → filter `[NightLens]` |
+| Background | Chrome/Edge/Brave/Opera: extensions page → **Service worker** (inspect). Firefox: `about:debugging` → **Inspect** |
+| Stored settings | DevTools → Application → Extension storage, key `nightlens:settings` |
+
+Developer mode in NightLens Settings → Performance also logs engine statistics to the page console.
 
 ## Troubleshooting
 
-- **"Manifest version 0.0.0"** — Run `npm run build`; version injected from `package.json`.
-- **"Could not establish connection"** in popup — Reload the tab (content script not injected until navigation after install).
-- **Light islands / unreadable logos** — Use popup toggle to exclude site, or add custom CSS in Settings → Websites.
-- **Schedule not triggering** — Check `chrome://extensions` → NightLens → Service worker → Alarms; ensure start/end valid HH:MM and enabled.
-- **Build fails on Node 18/20** — Upgrade to Node 22.12+ (Vite 8 requirement).
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md). The most common issues:
 
-## E2E Chromium Binary
-
-The default is Playwright's installed Chromium (`npx playwright install chromium`). Override:
-
-```bash
-NIGHTLENS_CHROMIUM=/path/to/chrome npm run test:e2e
-# Windows: set NIGHTLENS_CHROMIUM=C:\path\to\chrome.exe && npm run test:e2e
-```
+- **"Could not establish connection"** in the popup → reload the tab; the content script is not
+  injected into tabs that were open before the extension was installed/reloaded.
+- **Firefox: pages are not darkened** → the host access grant is missing. Open the popup and click
+  **Grant access**, or allow the site in `about:addons` → NightLens → Permissions.
+- **Manifest version 0.0.0** → run the build; the version is injected from `package.json`.
 
 ## Icons
 
-Generated via `scripts/make-icons.mjs` (no deps, pure JS PNG). Icons are simple, original, no third-party assets.
-
-## Permissions
-
-From `dist/manifest.json`: `storage`, `content_scripts` on `http/https`, `Alt+Shift+D` command. No remote code, no extra hosts. See `SECURITY_AND_PRIVACY.md`.
-
+Generated by `scripts/make-icons.mjs` (pure JavaScript PNG writer, no third-party assets).

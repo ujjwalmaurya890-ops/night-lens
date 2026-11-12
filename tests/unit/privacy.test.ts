@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { buildManifest } from '../../scripts/build/manifest.mjs';
+import { DEFAULT_TARGETS, TARGETS } from '../../scripts/build/targets.mjs';
 
 const root = process.cwd();
 
@@ -15,7 +17,12 @@ function walk(dir: string, out: string[] = []): string[] {
 
 const sourceFiles = walk(resolve(root, 'src')).filter((f) => /\.(ts|tsx|json)$/.test(f));
 const sourceText = sourceFiles.map((f) => ({ file: f, text: readFileSync(f, 'utf8') }));
-const manifest = JSON.parse(readFileSync(resolve(root, 'src/manifest.json'), 'utf8')) as Record<string, unknown>;
+// Manifests are generated per browser from one base plus a target override (see manifests/),
+// so the privacy invariants are asserted against what is actually shipped.
+const targetManifests = DEFAULT_TARGETS.map((id) => ({
+  file: `${id}.json`,
+  manifest: buildManifest({ root, target: TARGETS[id] }) as Record<string, unknown>,
+}));
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -58,28 +65,49 @@ describe('privacy invariants (contribution 17)', () => {
     ]);
   });
 
-  it('asks for the minimum permissions and no host permissions', () => {
-    expect(manifest.permissions).toEqual(['storage']);
-    expect(manifest.host_permissions).toEqual([]);
-    expect(manifest).not.toHaveProperty('externally_connectable');
-    expect(manifest).not.toHaveProperty('web_accessible_resources');
-    expect(manifest).not.toHaveProperty('optional_permissions');
-    expect(JSON.stringify(manifest.permissions)).not.toMatch(/tabs|history|cookies|webRequest|scripting/);
+  it('asks for the minimum permissions in every browser build', () => {
+    expect(targetManifests.length).toBeGreaterThanOrEqual(6);
+    for (const { file, manifest } of targetManifests) {
+      expect(manifest.permissions, file).toEqual(['storage']);
+      expect(manifest, file).not.toHaveProperty('externally_connectable');
+      expect(manifest, file).not.toHaveProperty('web_accessible_resources');
+      expect(manifest, file).not.toHaveProperty('optional_permissions');
+      expect(manifest, file).not.toHaveProperty('optional_host_permissions');
+      expect(JSON.stringify(manifest.permissions), file).not.toMatch(/tabs|history|cookies|webRequest|scripting|downloads/);
+    }
+  });
+
+  it('declares host access only where the engine requires an explicit grant', () => {
+    // Chromium grants what content_scripts.matches implies; Firefox MV3 and Safari need the
+    // grant spelled out, and both are restricted to http/https with no <all_urls>.
+    for (const { file, manifest } of targetManifests) {
+      const hosts = (manifest.host_permissions ?? []) as string[];
+      const isChromium = ['chrome.json', 'edge.json', 'brave.json', 'opera.json'].includes(file);
+      if (isChromium) expect(hosts, file).toEqual([]);
+      else {
+        expect(hosts, file).toEqual(['http://*/*', 'https://*/*']);
+        expect(hosts.join(','), file).not.toMatch(/<all_urls>|file:|ftp:/);
+      }
+    }
   });
 
   it('injects only into http and https pages, at document_start, without evaluation', () => {
-    const scripts = manifest.content_scripts as Array<Record<string, unknown>>;
-    expect(scripts).toHaveLength(1);
-    expect(scripts[0]!.matches).toEqual(['http://*/*', 'https://*/*']);
-    expect(scripts[0]!.run_at).toBe('document_start');
-    expect(scripts[0]).not.toHaveProperty('world');
-    expect(String(scripts[0]!.js)).not.toMatch(/eval|remote|http/i);
+    for (const { file, manifest } of targetManifests) {
+      const scripts = manifest.content_scripts as Array<Record<string, unknown>>;
+      expect(scripts, file).toHaveLength(1);
+      expect(scripts[0]!.matches, file).toEqual(['http://*/*', 'https://*/*']);
+      expect(scripts[0]!.run_at, file).toBe('document_start');
+      expect(scripts[0], file).not.toHaveProperty('world');
+      expect(String(scripts[0]!.js), file).not.toMatch(/eval|remote|http/i);
+    }
   });
 
   it('stores settings only under the documented local key', () => {
     const keys = [...new Set(sourceText.flatMap(({ text }) => [...text.matchAll(/'(nightlens:[a-z-]+)'/g)].map((m) => m[1]!)))];
     expect(keys.sort()).toEqual(['nightlens:settings']);
-    const storageAreas = sourceText.flatMap(({ text }) => [...text.matchAll(/chrome\.storage\.(local|sync|session)/g)].map((m) => m[1]!));
+    // The adapter layer is the only place that names a storage area, and it must be local only:
+    // `sync` would send settings to the browser vendor's account service.
+    const storageAreas = sourceText.flatMap(({ text }) => [...text.matchAll(/storage\.(local|sync|managed|session)/g)].map((m) => m[1]!));
     expect([...new Set(storageAreas)]).toEqual(['local']);
   });
 

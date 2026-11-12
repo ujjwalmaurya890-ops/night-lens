@@ -3,7 +3,7 @@
 ## Runtime model
 
 ```text
-Popup / Options ── writes ──> chrome.storage.local ("nightlens:settings")
+Popup / Options ── writes ──> extension local storage ("nightlens:settings")
                                    │ onChanged
                                    ▼
 HTTP/HTTPS content script ──> decide() + effective per-site settings
@@ -28,8 +28,27 @@ The service worker has no periodic alarm. Schedules and system/reduced-motion me
 ## Source layout
 
 ```text
+manifests/
+  base.mv3.json            shared manifest keys
+  {chrome,edge,brave,opera,firefox,safari}.json   per-engine overrides
 src/
-  manifest.json            MV3 template; build injects package version
+  adapters/
+    browser/
+      index.ts             detection, namespace choice, cached facade (getBrowserApi)
+      types.ts             the API surface the application is allowed to use
+      errors.ts            typed errors with actionable messages
+      call.ts              promise/callback invocation, listener helpers, safe calls
+      compose.ts           assembles the per-API adapters into one facade
+      chrome.adapter.ts    Chromium (callback-or-promise namespace)
+      firefox.adapter.ts   Gecko (promise-only `browser` namespace)
+      safari.adapter.ts    WebKit (both namespaces)
+      runtime.adapter.ts   messaging, install/startup events, manifest, options page
+      storage.adapter.ts   local storage + change events
+      tabs.adapter.ts      active tab, message to a specific tab/frame
+      commands.adapter.ts  keyboard shortcuts
+      action.adapter.ts    toolbar badge/title + options page
+      permissions.adapter.ts  host grants (Firefox) and grant-change events
+      capabilities.ts      what this engine actually exposes
   shared/
     types.ts               Settings, theme IDs, site/status types
     defaults.ts            Defaults, limits, legacy migration
@@ -50,9 +69,67 @@ src/
   background/              Command, badge, installation, and message handlers
   popup/                   React toolbar UI
   options/                 React settings dashboard (tabs/, SiteOverrideEditor)
-  ui/                      Shared components (incl. ThemePreview), hooks, icons, and styles
-scripts/build.mjs          Vite UI bundles + IIFE worker/content bundles
+  ui/                      Shared components, hooks, browser-specific copy, icons, styles
+scripts/
+  build.mjs                one Vite build → six manifests
+  build/manifest.mjs       merge + validation
+  build/targets.mjs        target table
+  verify-build.mjs         built-output verification
+  package.mjs, build/zip.mjs   store archives without dependencies
+  safari-project.mjs       Apple converter wrapper (macOS only)
 ```
+
+## Browser adapter layer
+
+No application module calls `chrome.*` or `browser.*` directly. `src/adapters/browser/` owns that,
+and `tests/unit/architecture.test.ts` fails the build if the rule is broken.
+
+```text
+popup / options / content / background
+                │
+                ▼
+        getBrowserApi()  ── detected once per namespace object
+                │
+      ┌─────────┼──────────┬─────────────┐
+      ▼         ▼          ▼             ▼
+   runtime   storage     tabs      commands / action / permissions
+      │         │          │             │
+      └─────────┴──────────┴─────────────┘
+                │
+      chrome.* (hybrid)  |  browser.* (promise)
+```
+
+Design rules:
+
+1. **Capabilities, not brand names.** `capabilities.*` is derived from the APIs that exist in the
+   namespace, so an unusual fork or a stripped-down engine degrades instead of crashing.
+2. **One call style per namespace.** `chrome.*` accepts a trailing callback *or* a promise (older
+   Chromium forks vs current builds), so the Chromium adapter detects and supports both.
+   `browser.*` on Gecko validates arity, so the Firefox adapter never appends a callback.
+3. **Never throw for cosmetic work.** Badge text, title and background colour failures are
+   swallowed; storage and messaging failures propagate as `BrowserApiError` with the API name so the
+   UI can say what actually failed.
+4. **No hardcoded browser assumptions in features.** Browser-specific *wording* (shortcut pages,
+   store names, storage namespace) lives only in `src/ui/copy.ts`; browser-specific *behaviour* lives
+   only in the adapters.
+5. **Same engine everywhere.** `content.js` is byte-identical in all six builds. The build shares one
+   bundling pass, so a Firefox user and a Chrome user cannot drift apart.
+
+Firefox MV3 host access is the one platform difference with a UI consequence: the content script
+does not run until the user allows the site, so the popup shows a **Grant access** notice backed by
+`permissions.request` from a click.
+
+## Build pipeline
+
+`npm run build` performs one Vite build (popup/options pages + `content.js` + `background.js` IIFE
+bundles + icons) into a staging directory, then emits each target by copying that directory and
+writing its generated manifest. Every manifest is validated for engine rules *and* NightLens'
+privacy invariants before it is written; every referenced path must exist. `npm run verify:build`
+re-checks the built output, including that the HTML pages load no remote resources and that no
+bundle contains `eval`/`new Function`/`XMLHttpRequest`.
+
+See [BUILD.md](BUILD.md) for commands and [BROWSER_COMPATIBILITY.md](BROWSER_COMPATIBILITY.md) for
+the per-engine differences.
 
 ## Per-site resolution
 

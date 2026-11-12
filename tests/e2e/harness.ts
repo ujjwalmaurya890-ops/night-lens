@@ -4,7 +4,17 @@ import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, extname } from 'node:path';
 
-export const DIST = resolve(process.cwd(), 'dist');
+/**
+ * The extension under test. `NIGHTLENS_TARGET` selects one of the browser builds produced by
+ * `npm run build` (chrome, edge, brave, opera); the browser itself can be overridden with
+ * `NIGHTLENS_CHROMIUM` (e.g. a Brave, Vivaldi or Edge executable), which is how the Chromium-family
+ * browsers that Playwright does not bundle are exercised.
+ */
+export const TARGET = process.env.NIGHTLENS_TARGET ?? 'chrome';
+export const DIST = resolve(process.cwd(), 'dist', TARGET);
+if (!existsSync(join(DIST, 'manifest.json'))) {
+  throw new Error(`No built extension at ${DIST}. Run: npm run build:${TARGET}`);
+}
 const FIXTURES = resolve(process.cwd(), 'tests/e2e/fixtures');
 const CHROMIUM = process.env.NIGHTLENS_CHROMIUM ?? chromium.executablePath();
 export const PORT_A = 4101;
