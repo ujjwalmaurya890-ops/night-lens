@@ -1,3 +1,4 @@
+import { getBrowserApi, type MessageHandler } from '../adapters/browser';
 import { ThemeEngine, type EngineConfig, type EngineStatus } from '../engine/engine';
 import { buildTokens } from '../engine/palette';
 import { decide, getEffectiveSettings } from '../shared/decision';
@@ -25,6 +26,8 @@ export function startContentScript(): () => void {
   if (w.__nightlensLoaded) return () => undefined;
   w.__nightlensLoaded = true;
 
+  const api = getBrowserApi();
+
   const isTop = window.top === window;
   const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -51,7 +54,7 @@ export function startContentScript(): () => void {
     if (!isExtensionContextValid()) return;
     const message: StatusChangedMessage = { type: STATUS_CHANGED, ...payload() };
     try {
-      void chrome.runtime.sendMessage(message).catch(() => undefined);
+      void api.runtime.sendMessage(message).catch(() => undefined);
     } catch { /* context went away between the check and the call */ }
   };
 
@@ -124,8 +127,10 @@ export function startContentScript(): () => void {
   const onVisibilityChange = (): void => {
     if (!document.hidden) apply();
   };
-  const onMessage = (message: unknown, sender: chrome.runtime.MessageSender, sendResponse: (response?: unknown) => void): boolean => {
-    if (sender.id !== chrome.runtime.id || typeof message !== 'object' || message === null) return false;
+  const onMessage: MessageHandler = (message, sender, sendResponse): boolean => {
+    const ownId = api.runtime.id();
+    // An orphaned content script has no id to compare against, so it must not answer.
+    if (ownId === null || sender.id !== ownId || typeof message !== 'object' || message === null) return false;
     if (isGetStatusMessage(message) && isTop) {
       sendResponse(payload());
       return false;
@@ -144,7 +149,7 @@ export function startContentScript(): () => void {
         cacheHit: stats.cacheHit,
       };
       try {
-        void chrome.runtime.sendMessage(info).catch(() => undefined);
+        void api.runtime.sendMessage(info).catch(() => undefined);
       } catch { /* context invalidated */ }
     }
     return false;
@@ -179,7 +184,7 @@ export function startContentScript(): () => void {
     motionQuery.removeEventListener('change', apply);
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('pagehide', onPageHide);
-    chrome.runtime.onMessage.removeListener(onMessage);
+    stopListening();
     engine.stop();
     w.__nightlensLoaded = false;
   }
@@ -194,6 +199,6 @@ export function startContentScript(): () => void {
   motionQuery.addEventListener('change', apply);
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('pagehide', onPageHide);
-  chrome.runtime.onMessage.addListener(onMessage);
+  const stopListening = api.runtime.onMessage(onMessage);
   return dispose;
 }

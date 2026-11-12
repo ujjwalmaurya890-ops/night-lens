@@ -14,6 +14,46 @@ npm install
 **`Manifest version 0.0.0`**
 - Run `npm run build` — version injected from `package.json`.
 
+**`No built extension at dist/<target>` when running the browser suite**
+- The E2E harness reads `dist/<target>`. Run `npm run build:chrome` (or `NIGHTLENS_TARGET=<id> npm
+  run test:e2e` with that target built).
+
+**`Unknown build target` from `npm run build -- --target ...`**
+- Valid targets: `chrome`, `edge`, `brave`, `opera`, `firefox`, `safari`. Safari additionally needs
+  `npm run build:safari` before packaging.
+
+## Cross-browser loading
+
+**Chrome/Edge/Brave/Opera load the wrong folder**
+- Each target lives in `dist/<target>`; the repository root and `dist/` itself no longer contain a
+  `manifest.json`.
+
+**A Chromium fork reports "Manifest file is missing or unreadable"**
+- You probably selected `dist/firefox` or `dist/safari/browser-extension`. Chromium forks need the
+  `dist/chrome` (or `dist/edge`/`dist/brave`/`dist/opera`) build; only Firefox and Safari accept an
+  event-page background.
+
+**Firefox: pages stay light and the popup says the page is unsupported**
+- Host access is missing. Click **Grant access** in the popup (then reload the tab), or enable
+  *Access your data for all websites* in `about:addons` → NightLens → Permissions. This is Firefox
+  MV3 behaviour, not a NightLens failure.
+
+**Firefox: "This add-on could not be installed because it has not been verified"**
+- Firefox only installs signed add-ons. Use `about:debugging` for a temporary add-on, or sign the
+  package (`web-ext sign`) - see [FIREFOX_INSTALL.md](FIREFOX_INSTALL.md).
+
+**Safari: `browser-extension` will not install**
+- Safari cannot load unpacked extensions. Run `safari-web-extension-converter` (or
+  `npm run safari:project`) on macOS with Xcode - see [SAFARI_INSTALL.md](SAFARI_INSTALL.md).
+
+**Safari: no keyboard shortcut**
+- Safari does not expose shortcut rebinding; use the popup switch. The `commands` entry is still
+  declared for browsers that support it.
+
+**Extension updated but a tab keeps the old behaviour**
+- Reload the tab. An orphaned content script cannot reconnect to a reloaded extension; NightLens
+  then leaves the page untouched instead of half-themed.
+
 ## Loading Extension
 
 **"Could not establish connection" in popup (unsupported page)**

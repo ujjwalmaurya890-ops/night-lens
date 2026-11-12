@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { getBrowserApi } from '../adapters/browser';
 import { LIMITS } from '../shared/defaults';
 import type { SiteStatus, ThemeId } from '../shared/types';
 import {
   AppearanceControls,
   CollapsiblePanel,
+  EnvironmentNotice,
+  HostAccessNotice,
   Logo,
   PresetChips,
   Slider,
@@ -14,6 +17,7 @@ import {
   THEME_LABELS,
 } from '../ui/components';
 import { usePageStatus, useSettings } from '../ui/hooks';
+import { browserCopy } from '../ui/copy';
 import {
   IconAlertCircle,
   IconCheckCircle,
@@ -117,7 +121,9 @@ export function App() {
 
   const isActive = page.state === 'ready' && page.status === 'active';
   const statusMeta = page.state === 'ready' ? STATUS_META[page.status] : null;
-  const version = chrome.runtime.getManifest?.()?.version ?? '1.0.0';
+  const api = getBrowserApi();
+  const version = api.runtime.getManifest()?.version ?? '1.0.0';
+  const copy = browserCopy();
 
   return (
     <main
@@ -163,6 +169,9 @@ export function App() {
       </header>
 
       <div className="popup-body">
+        <EnvironmentNotice />
+        <HostAccessNotice />
+
         {/* Current Website Control Card */}
         <section
           className={`card card-compact stack stagger-1 ${isActive ? 'card-active' : ''}`}
@@ -191,7 +200,7 @@ export function App() {
             <div className="notice-banner notice-banner-info">
               <IconInfo size={15} style={{ marginTop: 1, flexShrink: 0 }} />
               <span>
-                NightLens can’t run on this page. Browser pages, the Chrome Web Store, local
+                NightLens can’t run on this page. Browser pages, the {copy.storeName}, local
                 files and PDF viewers are not supported. If you just installed or updated
                 NightLens, reload the tab.
               </span>
@@ -418,7 +427,7 @@ export function App() {
                   <kbd className="kbd">Alt+Shift+D</kbd>
                 </div>
                 <p className="field-hint">
-                  Change it at chrome://extensions/shortcuts. The shortcut toggles the global switch.
+                  Change it at {copy.shortcutsLocation}. The shortcut toggles the global switch.
                 </p>
               </div>
 
@@ -441,7 +450,7 @@ export function App() {
             type="button"
             className="btn btn-ghost btn-sm"
             aria-label="Settings"
-            onClick={() => void chrome.runtime.openOptionsPage()}
+            onClick={() => void api.options.open()}
           >
             <IconSettings size={14} />
             <span>Settings</span>

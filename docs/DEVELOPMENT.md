@@ -18,7 +18,7 @@ npm test
 npm run build
 ```
 
-Load `dist/` via `chrome://extensions` → **Developer mode** → **Load unpacked**. After a rebuild,
+Load `dist/chrome` (or `dist/edge`, `dist/brave`, `dist/opera`, `dist/firefox`) via the browser's extensions page → **Developer mode** → **Load unpacked**. After a rebuild,
 press the extension's reload button and reload the tab you are testing: a content script that is
 already running keeps using the old code.
 
@@ -28,7 +28,7 @@ already running keeps using the old code.
 |---|---|
 | `npm run typecheck` | `tsc --noEmit` with `strict`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride`. |
 | `npm test` | Vitest in jsdom: engine, colour, storage, UI, accessibility, security, privacy invariants. |
-| `npm run build` | `scripts/build.mjs`: Vite builds the popup/options pages, then IIFE bundles for `content.js` and `background.js`, then injects the version into `dist/manifest.json` and generates icons. |
+| `npm run build` | `scripts/build.mjs`: one Vite pass builds the popup/options pages plus IIFE bundles for `content.js` and `background.js`, then each target gets those files with its generated `manifest.json` under `dist/<target>/`. Per-target validation runs before a manifest is written. |
 | `npm run preview:ui` | Renders the popup/options markup with mock data in a plain browser page (useful for CSS work without loading the extension). |
 | `npm run test:e2e` | Builds, then runs Playwright with the real extension loaded into Chromium. |
 | `npm run verify` | Typecheck + unit tests + E2E. |
@@ -132,8 +132,9 @@ failure only; the suite retries once in CI and `test.only` is rejected there.
 
 | Job | What it does |
 |---|---|
-| `verify` | `npm ci` → typecheck → 704 unit tests → build → assert the built manifest still asks only for `storage` with no host permissions → upload `dist/`. ~30 s. |
-| `e2e` | needs `verify`; caches `~/.cache/ms-playwright`, installs Chromium with deps, runs the 42 Playwright tests against the built extension in `dist/`. ~1 min 45 s. |
+| `verify` | `npm ci` → typecheck → unit tests → build all targets → built-output verification → upload `dist/` + `artifacts/`. |
+| `targets` | a matrix that builds, verifies and packages each browser target on its own. |
+| `e2e` | needs `verify`; caches `~/.cache/ms-playwright`, installs Chromium with deps, runs the Playwright suite against `dist/chrome`. |
 
 Third-party actions are pinned to commit SHAs (with the version in a comment), the workflow holds
 `contents: read`, and the `e2e` job additionally gets `pull-requests: write` for one purpose: when the
@@ -158,7 +159,7 @@ the annotations and the comment are the fallback.
    it into the manifest).
 3. Confirm the manifest still requests only `storage` and no host permissions; the CI job enforces
    this on the built bundle.
-4. Load `dist/` and smoke-test: popup opens, theme switch, per-site exclude, toggle off restores the
+4. Load the relevant `dist/<target>` and smoke-test: popup opens, theme switch, per-site exclude, toggle off restores the
    page, options page renders every tab.
-5. Zip `dist/` for distribution if needed; `nightlens.zip` in the repository is a build artifact and
+5. Run `npm run package` for store archives; `dist/` and `artifacts/` are build output and
    is not required to reproduce a build.

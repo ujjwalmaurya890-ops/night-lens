@@ -1,10 +1,10 @@
 # Manual Browser Test Checklist (Live Sites — Not Automated)
 
-Use this after loading `dist/` in Chrome. Test on diverse categories: news (BBC/NYT), docs (MDN/Dev.to), edu (Khan/Coursera), social (Reddit/Twitter), e-commerce (Amazon), dev tools (GitHub), blogs (Medium), dashboards (Grafana), webapps (Notion/Figma). Do *not* claim universal compatibility.
+Use this after loading `dist/<target>` in the browser you are testing (see [TESTING.md](TESTING.md) for the full cross-browser matrix). Test on diverse categories: news (BBC/NYT), docs (MDN/Dev.to), edu (Khan/Coursera), social (Reddit/Twitter), e-commerce (Amazon), dev tools (GitHub), blogs (Medium), dashboards (Grafana), webapps (Notion/Figma). Do *not* claim universal compatibility.
 
 ## 1. Install & First Paint
-- [ ] `npm run build` succeeds, `dist/manifest.json` version matches `package.json`.
-- [ ] Load unpacked `dist/` → no errors in `chrome://extensions`.
+- [ ] `npm run build` succeeds, `npm run verify:build` passes, `dist/<target>/manifest.json` version matches `package.json`.
+- [ ] Load unpacked `dist/<target>/` → no errors in the browser's extensions page.
 - [ ] Open `https://example.com` → dark theme applies, no white flash (early-paint guard).
 - [ ] Disable via popup → original colors return exactly (inspect outerHTML diff).
 - [ ] Reload tab → state persists.

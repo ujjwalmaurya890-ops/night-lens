@@ -19,7 +19,11 @@ describe('popup', () => {
     expect(screen.getByRole('heading', { name: /NightLens/ })).toBeTruthy();
     expect(await screen.findByText('news.example.com')).toBeTruthy();
     expect(screen.getByText(/Dark mode is active on this site/)).toBeTruthy();
-    expect(mock.tabs.sendMessage).toHaveBeenCalledWith(5, { type: 'nightlens/get-status' }, { frameId: 0 });
+    // The adapter may append a trailing callback on the callback-style Chromium namespace, so the
+    // assertion covers the meaningful arguments rather than the whole call.
+    const call = mock.tabs.sendMessage.mock.calls[0]!;
+    expect(call.slice(0, 2)).toEqual([5, { type: 'nightlens/get-status' }]);
+    expect(call[2]).toEqual({ frameId: 0 });
   });
 
   it('global toggle persists and announces the result', async () => {

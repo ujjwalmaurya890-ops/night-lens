@@ -2,7 +2,8 @@ import { useEffect, useId, useState, type CSSProperties, type ReactNode } from '
 import { LIMITS } from '../shared/defaults';
 import { PREMIUM_THEME_META, PRESETS, themePreviewColors } from '../engine/palette';
 import { PREMIUM_THEME_IDS, THEME_IDS, type Settings, type ThemeId } from '../shared/types';
-import { IconAlertTriangle, IconCheck, IconCheckCircle } from './icons';
+import { IconAlertTriangle, IconCheck, IconCheckCircle, IconInfo, IconShield } from './icons';
+import { useEnvironment, useHostAccess } from './hooks';
 
 export const THEME_LABELS: Record<string, string> = (() => {
   const map: Record<string, string> = {};
@@ -719,6 +720,77 @@ export function EmptyState({ icon, title, description }: { icon?: ReactNode; tit
       {icon}
       <span className="empty-state-title">{title}</span>
       {description && <span className="field-hint">{description}</span>}
+    </div>
+  );
+}
+
+/**
+ * Shown when the page is not running with a usable extension API (opened as a plain file, or the
+ * extension was disabled mid-session). Silence here used to look like "settings are ignored".
+ */
+export function EnvironmentNotice() {
+  const environment = useEnvironment();
+  if (environment.available) return null;
+  return (
+    <div className="notice-banner notice-banner-warn" role="alert">
+      <IconAlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+      <span>{environment.problem}</span>
+    </div>
+  );
+}
+
+/**
+ * Firefox MV3 keeps host access as a revocable grant. Without it the content script never runs,
+ * so the popup would otherwise only say "this page is unsupported". This notice states the real
+ * cause and offers the only fix the platform allows: an explicit request from a click.
+ */
+export function HostAccessNotice() {
+  const hostAccess = useHostAccess();
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (!hostAccess.required) return null;
+
+  if (hostAccess.granted) {
+    return feedback ? (
+      <div className="notice-banner notice-banner-info" role="status" aria-live="polite">
+        <IconInfo size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>{feedback}</span>
+      </div>
+    ) : null;
+  }
+
+  return (
+    <div className="notice-banner notice-banner-warn" role="status" aria-live="polite">
+      <IconShield size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+      <div className="stack-xs" style={{ flex: 1 }}>
+        <span>
+          {hostAccess.browserLabel} has not granted NightLens access to websites, so pages are not
+          being darkened. Grant access, then reload this tab.
+        </span>
+        {feedback && <span className="field-hint">{feedback}</span>}
+      </div>
+      <button
+        type="button"
+        className="btn btn-sm"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          // The request must run inside the click handler itself (user-gesture requirement).
+          void hostAccess
+            .request()
+            .then((granted) => {
+              setFeedback(
+                granted
+                  ? 'Access granted. Reload the page to apply NightLens.'
+                  : 'Access was not granted. You can allow it later in the extension’s Permissions settings.',
+              );
+            })
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? 'Requesting…' : 'Grant access'}
+      </button>
     </div>
   );
 }
